@@ -3,6 +3,18 @@ from types import FunctionType, ModuleType
 import numpy as np
 from numpy.random import rand
 
+default_parms = {
+    "pi": 3.1415926,
+    "e": 2.71828183,
+    "sqrt": np.sqrt,
+    "sin": np.sin,
+    "cos": np.cos,
+    "tan": np.tan,
+    "exp": np.exp,
+    "log": np.log,
+    "rand": rand,
+}
+
 
 def eval_expr(expr: str, parms: dict):
     """
@@ -12,56 +24,56 @@ def eval_expr(expr: str, parms: dict):
     """
     # TODO: Improve the workflow in a way that numpy functions
     # and constants be loaded just if they are needed.
-    default_parms = {
-        "pi": 3.1415926,
-        "e": 2.71828183,
-        "sqrt": np.sqrt,
-        "sin": np.sin,
-        "cos": np.cos,
-        "tan": np.tan,
-        "exp": np.exp,
-        "log": np.log,
-        "rand": rand,
-    }
 
-    default_parms.update(parms)
-    parms = default_parms
+    if not isinstance(expr, str):
+        return expr
 
-    if isinstance(expr, str):
+    try:
+        return float(expr)
+    except (ValueError, TypeError):
         try:
-            return float(expr)
+            return complex(expr)
         except (ValueError, TypeError):
-            try:
-                return complex(expr)
-            except (ValueError, TypeError):
-                pass
-
-        value = parms.pop(expr, None)
-        if value is not None:
-            if isinstance(value, str):
-                return eval_expr(value, parms)
-            return value
-
-    p_vars = [k for k in parms]
-    for k in p_vars:
-        if k in default_parms or isinstance(
-            parms[k], (FunctionType, ModuleType, np.ufunc)
-        ):
-            continue
-        val = parms.pop(k)
-        try:
-            nval = eval_expr(val, parms)
-        except RecursionError:
-            raise
-        if not check_numeric(nval):
-            raise ValueError(val)
-        parms[k] = nval
-
-    if isinstance(expr, str):
-        try:
-            return eval(expr, parms)
-        except NameError:
             pass
+
+    parms = {key.replace("'", "_prima"):val  for key, val in parms.items() if val is not None}
+    expr = expr.replace("'", "_prima")
+ 
+    value = parms.pop(expr, None)
+    if value is not None:
+        if isinstance(value, str):
+            return eval_expr(value, parms)
+        return value
+
+    # Reduce the parameters
+    p_vars = [k for k in parms]
+    while True:
+        changed = False
+        for k in p_vars:
+            val = parms.pop(k)
+            if not isinstance(val, str):
+                parms[k] = val
+                continue
+            try:
+                result = eval_expr(val, parms)
+                if result is not None:
+                    parms[k] = result
+                if val != result:
+                    changed = True
+            except RecursionError:
+                raise
+        if not changed:
+            break
+    parms.update(default_parms)
+    try:
+        return eval(expr, parms)
+    except NameError as e:
+        pass
+    except TypeError as e:
+        print("Type Error. Undefined variables in ", expr, e)
+        for p in parms:
+            if parms[p] is None:
+                print("   ",p, "->", parms[p])
     return expr
 
 
