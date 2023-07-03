@@ -1,12 +1,9 @@
 import xml.etree.ElementTree as ET
-from types import FunctionType, ModuleType
 from typing import Optional
 
-import numpy as np
 import qutip
-from numpy.random import rand
 
-from alpsqutip.utils import eval_expr, find_ref, next_name
+from alpsqutip.utils import eval_expr, find_ref
 
 
 def list_operators_in_alps_xml(filename="models.xml"):
@@ -27,7 +24,9 @@ def list_operators_in_alps_xml(filename="models.xml"):
     return tuple(result)
 
 
-def build_local_basis_from_qn_descriptors(qns: dict, parms: dict) -> dict:
+def build_local_basis_from_qn_descriptors(
+    qns: dict, parms: Optional[dict] = None
+) -> dict:
     """
     From a quantum number descriptor and a set of parameters,
     build a dictionary with keys `qns` and `basis`.
@@ -36,7 +35,7 @@ def build_local_basis_from_qn_descriptors(qns: dict, parms: dict) -> dict:
     in the tuples in `basis`.
     """
     local_basis = [{}]
-    parms = parms.copy()
+    parms = parms.copy() if parms is not None else {}
     while True:
         # The new basis to be built over the previous basis
         new_basis = []
@@ -73,7 +72,7 @@ def build_local_basis_from_qn_descriptors(qns: dict, parms: dict) -> dict:
     return {"qns": qn_indx, "basis": basis_vectors}
 
 
-def model_from_alps_xml(filename="lattices.xml", name="spin", graph=None, parms=None):
+def model_from_alps_xml(filename="lattices.xml", name="spin", parms=None):
     """
     Load from `filename` xml library a model of name
     `name`, using `parms` as parameters.
@@ -89,10 +88,11 @@ def model_from_alps_xml(filename="lattices.xml", name="spin", graph=None, parms=
         constraints = {}
         sitebasis = {}
         for constraint_node in node.findall("./CONSTRAINT"):
-            constr_attrib = dict(constraint_node.items())
-            constraints[constr_attrib["quantumnumber"]] = constr_attrib["value"]
+            constr_attrib = constraint_node.attrib
+            qn_name = constr_attrib["quantumnumber"]
+            constraints[qn_name] = constr_attrib["value"]
         for sitebasis_node in node.findall("./SITEBASIS"):
-            type_name = dict(sitebasis_node.items()).get("type", "0")
+            type_name = sitebasis_node.attrib.get("type", "0")
             sitebasis[type_name] = process_sitebasis(
                 find_ref(sitebasis_node, models), parms
             )

@@ -357,7 +357,6 @@
     Jz#*Sz(i)*Sz(j)+Jxy#*exchange_xy(i,j)+K#*biquadratic(i,j)
   </BONDTERM>
 </HAMILTONIAN>
-
 <HAMILTONIAN name="boson Hubbard">
   <PARAMETER name="mu" default="0"/>
   <PARAMETER name="K" default="0"/>

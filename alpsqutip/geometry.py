@@ -1,5 +1,4 @@
 import xml.etree.ElementTree as ET
-from types import FunctionType, ModuleType
 from typing import Optional
 
 import numpy as np

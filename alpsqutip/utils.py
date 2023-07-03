@@ -1,5 +1,3 @@
-from types import FunctionType, ModuleType
-
 import numpy as np
 from numpy.random import rand
 
@@ -32,18 +30,20 @@ def eval_expr(expr: str, parms: dict):
         return float(expr)
     except (ValueError, TypeError):
         try:
-            return complex(expr)
+            if expr not in ("J", "j"):
+                return complex(expr)
         except (ValueError, TypeError):
             pass
 
-    parms = {key.replace("'", "_prima"):val  for key, val in parms.items() if val is not None}
+    parms = {
+        key.replace("'", "_prima"): val for key, val in parms.items() if val is not None
+    }
     expr = expr.replace("'", "_prima")
- 
-    value = parms.pop(expr, None)
-    if value is not None:
-        if isinstance(value, str):
-            return eval_expr(value, parms)
-        return value
+
+    while expr in parms:
+        expr = parms.pop(expr)
+        if not isinstance(expr, str):
+            return expr
 
     # Reduce the parameters
     p_vars = [k for k in parms]
@@ -66,14 +66,15 @@ def eval_expr(expr: str, parms: dict):
             break
     parms.update(default_parms)
     try:
-        return eval(expr, parms)
-    except NameError as e:
+        result = eval(expr, parms)
+        return result
+    except NameError:
         pass
     except TypeError as e:
         print("Type Error. Undefined variables in ", expr, e)
         for p in parms:
             if parms[p] is None:
-                print("   ",p, "->", parms[p])
+                print("   ", p, "->", parms[p])
     return expr
 
 
