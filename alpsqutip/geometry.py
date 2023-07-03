@@ -62,7 +62,12 @@ def graph_from_alps_xml(
         for e in node.findall("./EDGE"):
             e_items = e.attrib
             list_edges = edges.get(e_items["type"], [])
-            list_edges.append((e_items["source"], e_items["target"],))
+            list_edges.append(
+                (
+                    e_items["source"],
+                    e_items["target"],
+                )
+            )
             edges[e_items["type"]] = list_edges
 
         return GraphDescriptor(name=name, nodes=vertices, edges=edges, parms=parms)
@@ -308,15 +313,6 @@ class GraphDescriptor:
         self.parms = parms or {}
         self.complete_coordiantes()
 
-    def subgraph(self, node_list:list, name:str=""):
-        nodes = self.nodes
-        nodes = {n:nodes[n] for n in node_list}
-        edges = {
-            t: [(src, dst,) for src, dst in e if (src in nodes) and (dst in nodes)]
-
-            for t, e in self.edges.items()}
-        
-        
     def complete_coordiantes(self):
         nodes = self.nodes
         lattice = self.lattice
@@ -362,10 +358,24 @@ class GraphDescriptor:
             )
         return result
 
-    def draw(self, ax):
+    def draw(self, ax, node_spec=None, edge_spec=None):
         coords = {}
+
+        if node_spec is None:
+            node_spec = {}
+        if edge_spec is None:
+            edge_spec = {}
+
+        default_node_spec = {
+            "c": "blue",
+        }
+        default_edge_spec = {
+            "c": "blue",
+        }
+
         nodes = self.nodes
         edges = self.edges
+
         if self.lattice and self.lattice["dimension"] > 2:
             for name in self.nodes:
                 coords[name] = nodes[name]["coords"][:3]
@@ -378,10 +388,28 @@ class GraphDescriptor:
                 coords[name] = nodes[name]["coords"][:2]
 
         for name, x in coords.items():
-            ax.scatter(*[[u] for u in x])
+            spec = node_spec.get(nodes[name]["type"], default_node_spec)
+            ax.scatter(*[[u] for u in x], **spec)
 
         for t, bl in edges.items():
+            spec = edge_spec.get(t, default_edge_spec)
             for src_name, tgt_name in bl:
                 src, tgt = coords[src_name], coords[tgt_name]
                 # TODO: color by type t
-                ax.plot(*[[u, v] for u, v in zip(src, tgt)])
+                ax.plot(*[[u, v] for u, v in zip(src, tgt)], **spec)
+
+    def subgraph(self, node_list: list, name: str = ""):
+        nodes = self.nodes
+        nodes = {n: nodes[n] for n in node_list}
+        edges = {
+            t: [
+                (
+                    src,
+                    dst,
+                )
+                for src, dst in e
+                if (src in nodes) and (dst in nodes)
+            ]
+            for t, e in self.edges.items()
+        }
+        return GraphDescriptor(name, nodes, edges)

@@ -1,12 +1,19 @@
-import qutip
 from typing import Optional
+
+import qutip
 
 from alpsqutip.geometry import GraphDescriptor
 from alpsqutip.utils import eval_expr
 
 
 class SystemDescriptor:
-    def __init__(self, graph: GraphDescriptor, basis: dict, parms: Optional[dict]=None, sites=None):
+    def __init__(
+        self,
+        graph: GraphDescriptor,
+        basis: dict,
+        parms: Optional[dict] = None,
+        sites=None,
+    ):
         self.graph = graph
         self.basis = basis
         self.parms = basis.parms
@@ -24,12 +31,12 @@ class SystemDescriptor:
         self._load_site_operators()
         self._load_global_ops()
 
-    def subsystem(self, sites:list):
+    def subsystem(self, sites: list):
         parms = self.parms.copy()
         basis = self.basis
         graph = self.graph.subgraph(sites)
         return SystemDescriptor(graph, basis, parms)
-        
+
     def _load_site_operators(self):
         for site_name, site in self.sites.items():
             for op_name in site["operators"]:
@@ -305,7 +312,7 @@ class Operator:
         result = self.partial_trace({})
         return result
 
-    def partial_trace(self, sites:list):
+    def partial_trace(self, sites: list):
         raise NotImplementedError
 
 

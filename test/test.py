@@ -1,6 +1,5 @@
-import pytest
 import matplotlib.pyplot as plt
-
+import pytest
 from alpsqutip.alpsmodels import list_operators_in_alps_xml, model_from_alps_xml
 from alpsqutip.geometry import graph_from_alps_xml, list_graph_in_alps_xml
 from alpsqutip.model import SystemDescriptor
