@@ -1,15 +1,17 @@
 import qutip
+from typing import Optional
 
 from alpsqutip.geometry import GraphDescriptor
 from alpsqutip.utils import eval_expr
 
 
 class SystemDescriptor:
-    def __init__(self, graph: GraphDescriptor, basis: dict, parms: dict):
+    def __init__(self, graph: GraphDescriptor, basis: dict, parms: Optional[dict]=None, sites=None):
         self.graph = graph
         self.basis = basis
         self.parms = basis.parms
-        self.parms.update(parms)
+        if parms is not None:
+            self.parms.update(parms)
         site_basis = basis.site_basis
         self.sites = {
             node: site_basis[attr["type"]] for node, attr in graph.nodes.items()
@@ -22,6 +24,12 @@ class SystemDescriptor:
         self._load_site_operators()
         self._load_global_ops()
 
+    def subsystem(self, sites:list):
+        parms = self.parms.copy()
+        basis = self.basis
+        graph = self.graph.subgraph(sites)
+        return SystemDescriptor(graph, basis, parms)
+        
     def _load_site_operators(self):
         for site_name, site in self.sites.items():
             for op_name in site["operators"]:
@@ -293,6 +301,13 @@ class Operator:
         tex = parts[1] if len(parts) > 2 else "-?-"
         return f"${tex}$"
 
+    def trace(self):
+        result = self.partial_trace({})
+        return result
+
+    def partial_trace(self, sites:list):
+        raise NotImplementedError
+
 
 class ProductOperator(Operator):
     def __init__(self, sites_op: dict, prefactor=1.0, system=None):
@@ -387,6 +402,13 @@ class ProductOperator(Operator):
             return self * op
         return NotImplementedError
 
+    def __pow__(self, exp):
+        return ProductOperator(
+            {s: op**exp for s, op in self.sites_op.items()},
+            self.prefactor**exp,
+            self.system,
+        )
+
     def to_qutip(self):
         if self.prefactor == 0:
             return self.prefactor
@@ -416,6 +438,21 @@ class NBodyOperator(Operator):
 
     def __repr__(self):
         return "(\n" + "\n+".join(repr(t) for t in self.terms) + "\n)"
+
+    def __pow__(self, exp):
+        if isinstance(exp, int):
+            if exp == 0:
+                return 1
+            if exp == 1:
+                return self
+            if exp > 1:
+                exp -= 1
+                return self * (self**exp)
+            else:
+                TypeError("NBodyOperator does not support negative powers")
+        raise TypeError(
+            f"unsupported operand type(s) for ** or pow(): 'NBodyOperator' and '{type(exp).__name__}'"
+        )
 
     def __add__(self, op):
         if isinstance(op, (int, float, complex)):

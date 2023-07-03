@@ -62,7 +62,7 @@ def graph_from_alps_xml(
         for e in node.findall("./EDGE"):
             e_items = e.attrib
             list_edges = edges.get(e_items["type"], [])
-            list_edges.append((e_items["source"], e_items["target"]))
+            list_edges.append((e_items["source"], e_items["target"],))
             edges[e_items["type"]] = list_edges
 
         return GraphDescriptor(name=name, nodes=vertices, edges=edges, parms=parms)
@@ -308,6 +308,15 @@ class GraphDescriptor:
         self.parms = parms or {}
         self.complete_coordiantes()
 
+    def subgraph(self, node_list:list, name:str=""):
+        nodes = self.nodes
+        nodes = {n:nodes[n] for n in node_list}
+        edges = {
+            t: [(src, dst,) for src, dst in e if (src in nodes) and (dst in nodes)]
+
+            for t, e in self.edges.items()}
+        
+        
     def complete_coordiantes(self):
         nodes = self.nodes
         lattice = self.lattice
