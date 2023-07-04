@@ -5,20 +5,27 @@ Basic unit test.
 import matplotlib.pyplot as plt
 import pytest
 import qutip
+import pkg_resources
+
+import alpsqutip
 from alpsqutip.alpsmodels import list_operators_in_alps_xml, model_from_alps_xml
 from alpsqutip.geometry import graph_from_alps_xml, list_graph_in_alps_xml
 from alpsqutip.model import ProductOperator, SystemDescriptor
 from alpsqutip.states import MixedQuantumState, ProductQuantumState
 from alpsqutip.utils import eval_expr
 
-lattice_lib_file = "../alpsqutip/lib/lattices.xml"
-model_lib_file = "../alpsqutip/lib/models.xml"
+
+ROOT_DIR = alpsqutip.__path__[0]
+FIGURES_DIR = f"{ROOT_DIR}/doc/figs"
+LATTICE_LIB_FILE = f"{ROOT_DIR}/lib/lattices.xml"
+MODEL_LIB_FILE =   f"{ROOT_DIR}/lib/models.xml"
 
 
 # TODO: Split me in more atomic units.
 
 
 def test_eval_expr():
+    
     parms = {"a": "J", "J": 2, "subexpr": "a*J"}
     test_cases = [
         ("2+a", 4),
@@ -37,11 +44,12 @@ def test_eval_expr():
 
 
 def test_load():
-    print("geometries:")
-    for name in list_graph_in_alps_xml(lattice_lib_file):
+    import os
+    cwd = os.getcwd()
+    for name in list_graph_in_alps_xml(LATTICE_LIB_FILE):
         try:
             g = graph_from_alps_xml(
-                lattice_lib_file, name, parms={"L": 3, "W": 3, "a": 1, "b": 1, "c": 1}
+                LATTICE_LIB_FILE, name, parms={"L": 3, "W": 3, "a": 1, "b": 1, "c": 1}
             )
         except Exception as e:
             assert False, f"geometry {name} could not be loaded due to {e}"
@@ -55,15 +63,15 @@ def test_load():
             ax = fig.add_subplot()
         ax.set_title(name)
         g.draw(ax)
-        plt.savefig(f"../alpsqutip/doc/figs/{name}.png")
+        plt.savefig(FIGURES_DIR + f"/{name}.png")
     print("models:")
 
-    for modelname in list_operators_in_alps_xml(model_lib_file):
+    for modelname in list_operators_in_alps_xml(MODEL_LIB_FILE):
         print("\n       ", modelname)
         print(40 * "*")
         try:
             model = model_from_alps_xml(
-                model_lib_file, modelname, parms={"Nmax": 3, "local_S": 0.5}
+                MODEL_LIB_FILE, modelname, parms={"Nmax": 3, "local_S": 0.5}
             )
             print(
                 "site types:",
@@ -74,19 +82,19 @@ def test_load():
 
 
 def test_all():
-    models = list_operators_in_alps_xml(model_lib_file)
-    graphs = list_graph_in_alps_xml(lattice_lib_file)
+    models = list_operators_in_alps_xml(MODEL_LIB_FILE)
+    graphs = list_graph_in_alps_xml(LATTICE_LIB_FILE)
 
     for model_name in models:
         print(model_name, "\n", 10 * "*")
         for graph_name in graphs:
             g = graph_from_alps_xml(
-                lattice_lib_file,
+                LATTICE_LIB_FILE,
                 graph_name,
                 parms={"L": 3, "W": 3, "a": 1, "b": 1, "c": 1},
             )
             model = model_from_alps_xml(
-                model_lib_file,
+                MODEL_LIB_FILE,
                 model_name,
                 parms={"L": 3, "W": 3, "a": 1, "b": 1, "c": 1, "Nmax": 5},
             )
@@ -103,9 +111,9 @@ def test_all():
 
 def test_states():
     system = SystemDescriptor(
-        basis=model_from_alps_xml(model_lib_file, "spin"),
+        basis=model_from_alps_xml(MODEL_LIB_FILE, "spin"),
         graph=graph_from_alps_xml(
-            lattice_lib_file, "open square lattice", parms={"L": 3, "a": 1}
+            LATTICE_LIB_FILE, "open square lattice", parms={"L": 3, "a": 1}
         ),
         parms={"h": 1, "J": 1},
     )

@@ -4,7 +4,13 @@ setup(
     name='Alps2Qutip',
     version='1.0',
     packages=['alpsqutip'],
-    url='http://www.yourwebsite.com',
+    package_data={
+        "alpsqutip":[
+            "lib/models.xml",
+            "lib/lattices.xml",
+        ],
+    },
+    url='http://www.fisica.unlp.edu.ar/Members/matera/english-version/mauricio-materas-personal-home-page',
     license='LICENSE.txt',
     author='Juan Mauricio Matera',
     author_email='matera@fisica.unlp.edu.ar',
