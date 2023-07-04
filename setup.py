@@ -15,7 +15,7 @@ setup(
     author='Juan Mauricio Matera',
     author_email='matera@fisica.unlp.edu.ar',
     description='Your project description',
-    long_description=open('README.md').read(),
+    long_description=open('README.rst').read(),
     install_requires=[
         'matplotlib',
         'qutip',
