@@ -70,7 +70,9 @@ def graph_from_alps_xml(
             )
             edges[e_items["type"]] = list_edges
 
-        return GraphDescriptor(name=name, nodes=vertices, edges=edges, parms=parms)
+        return GraphDescriptor(
+            name=name, nodes=vertices, edges=edges, parms=parms
+        )
 
     def process_lattice(node, parms):
         """Process a <LATTICE> node"""
@@ -88,7 +90,9 @@ def graph_from_alps_xml(
 
         for b in node.findall("./RECIPROCALBASIS"):
             for v in b.findall("./VECTOR"):
-                coords = [eval_expr(c.strip(), parms) for c in v.text.split(" ")]
+                coords = [
+                    eval_expr(c.strip(), parms) for c in v.text.split(" ")
+                ]
                 reciprocal_basis.append(coords)
 
         return lattice
@@ -155,7 +159,8 @@ def graph_from_alps_xml(
                 if coords is not None:
                     v_attr = v_attr.copy()
                     v_attr["coords"] = (
-                        sum(c * b for c, b in zip(cell, lattice_basis)) + coords
+                        sum(c * b for c, b in zip(cell, lattice_basis))
+                        + coords
                     )
 
                 vertices[f"{vertex}{list(cell)}"] = v_attr
@@ -164,7 +169,9 @@ def graph_from_alps_xml(
         for inhomogeneous in node.findall("./INHOMOGENEOUS"):
             for v in inhomogeneous.findall("VERTEX"):
                 v_items = process_vertex(v, parms)
-                v_name = v_items.get("name", None) or next_name(vertices, 1, "defect_")
+                v_name = v_items.get("name", None) or next_name(
+                    vertices, 1, "defect_"
+                )
                 vertices[v_name] = v_items
 
         # Build edges
@@ -202,7 +209,11 @@ def graph_from_alps_xml(
             edges[et] = bonds
 
         return GraphDescriptor(
-            name=name, nodes=vertices, edges=edges, lattice=lattice, parms=parms
+            name=name,
+            nodes=vertices,
+            edges=edges,
+            lattice=lattice,
+            parms=parms,
         )
 
     def process_parms(node, parms):

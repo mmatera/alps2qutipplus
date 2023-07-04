@@ -36,7 +36,9 @@ def eval_expr(expr: str, parms: dict):
             pass
 
     parms = {
-        key.replace("'", "_prima"): val for key, val in parms.items() if val is not None
+        key.replace("'", "_prima"): val
+        for key, val in parms.items()
+        if val is not None
     }
     expr = expr.replace("'", "_prima")
 
