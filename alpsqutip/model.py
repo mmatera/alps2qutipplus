@@ -31,6 +31,14 @@ class SystemDescriptor:
         self._load_site_operators()
         self._load_global_ops()
 
+    def __repr__(self):
+        result = (
+            "graph:" + repr(self.graph)+"\n" +
+            "sites:" + repr(self.sites.keys()) + "\n" +
+            "dimensions:" + repr(self.dimensions)
+        )
+        return result
+        
     def subsystem(self, sites: list):
         parms = self.parms.copy()
         basis = self.basis
@@ -304,13 +312,16 @@ class Operator:
         return op + nop
 
     def _repr_latex_(self):
-        parts = self.to_qutip()._repr_latex_().split("$")
-        tex = parts[1] if len(parts) > 2 else "-?-"
+        qutip_repr = self.to_qutip()
+        if isinstance(qutip_repr, qutip.Qobj):
+            parts = qutip_repr._repr_latex_().split("$")
+            tex = parts[1] if len(parts) > 2 else "-?-"
+        else:
+            tex = str(qutip_repr)
         return f"${tex}$"
 
-    def trace(self):
-        result = self.partial_trace({})
-        return result
+    def tr(self):
+        raise NotImplementedError
 
     def partial_trace(self, sites: list):
         raise NotImplementedError
@@ -329,22 +340,6 @@ class ProductOperator(Operator):
             self.dimensions = {
                 name: site["dimension"] for name, site in system.sites.items()
             }
-
-    def __repr__(self):
-        result = str(self.prefactor) + " * (\n"
-        result += "\n".join(str(item) for item in self.sites_op.items())
-        result += ")"
-        return result
-
-    def dag(self):
-        """
-        Return the adjoint operator
-        """
-        sites_op_dag = {key: op.dag() for key, op in self.sites_op.items()}
-        prefactor = self.prefactor
-        if isinstance(prefactor, complex):
-            prefactor = prefactor.conj()
-        return ProductOperator(sites_op_dag, prefactor, self.system)
 
     def __add__(self, op):
         if self.prefactor == 0:
@@ -395,7 +390,7 @@ class ProductOperator(Operator):
                 system=self.system,
             )
         if isinstance(op, NBodyOperator):
-            new_terms = [self * op2 for op2 in op.terms_coeffs]
+            new_terms = [self * op2 for op2 in op.terms]
             new_terms = [op for op in new_terms if op.prefactor]
             return NBodyOperator(new_terms)
 
@@ -404,11 +399,6 @@ class ProductOperator(Operator):
     def __neg__(self):
         return ProductOperator(self.sites_op, -self.prefactor, self.system)
 
-    def __rmul__(self, op):
-        if isinstance(op, (int, float, complex)):
-            return self * op
-        return NotImplementedError
-
     def __pow__(self, exp):
         return ProductOperator(
             {s: op**exp for s, op in self.sites_op.items()},
@@ -416,21 +406,65 @@ class ProductOperator(Operator):
             self.system,
         )
 
+    def __repr__(self):
+        result = str(self.prefactor) + " * (\n"
+        result += "\n".join(str(item) for item in self.sites_op.items())
+        result += ")"
+        return result
+    
+    def __rmul__(self, op):
+        if isinstance(op, (int, float, complex)):
+            return self * op
+        return NotImplementedError
+
+
+    def dag(self):
+        """
+        Return the adjoint operator
+        """
+        sites_op_dag = {key: op.dag() for key, op in self.sites_op.items()}
+        prefactor = self.prefactor
+        if isinstance(prefactor, complex):
+            prefactor = prefactor.conj()
+        return ProductOperator(sites_op_dag, prefactor, self.system)
+    
+    def partial_trace(self, sites: list):
+        full_system_sites = self.system.sites
+        dimensions = self.dimensions
+        sites_in = [s for s in sites if s in full_system_sites]
+        sites_out = [s for s in full_system_sites if s not in sites_in]
+        subsystem = self.system.subsystem(sites_in)
+        sites_op = self.sites_op
+        prefactors = [sites_op[s].tr() if s in sites_op else dimensions[s] for s in sites_out]
+        sites_op = {s:o for s,o in sites_op.items() if s in sites_in}
+        prefactor = self.prefactor
+        for p in prefactors:
+            if p==0:
+                return ProductOperator({}, p, subsystem)
+            prefactor *= p
+        return ProductOperator(sites_op, prefactor, subsystem)
+    
     def to_qutip(self):
-        if self.prefactor == 0:
-            return self.prefactor
-        if len(self.sites_op) == 0:
+        if self.prefactor == 0 or len(self.system.dimensions) == 0:
             return self.prefactor
         ops = self.sites_op
         return self.prefactor * qutip.tensor(
             [
-                ops[site] if site in ops else qutip.qeye(dim)
+                ops.get(site, None) if site in ops else qutip.qeye(dim)
                 for site, dim in self.system.dimensions.items()
             ]
         )
 
+    def tr(self):
+        result = self.partial_trace([])
+        return result.prefactor
+
 
 class NBodyOperator(Operator):
+    """
+    Represents a linear combination of product operators
+    """
+
     def __init__(self, terms_coeffs: list):
         self.terms = terms_coeffs
         if terms_coeffs:
@@ -442,24 +476,6 @@ class NBodyOperator(Operator):
                     continue
                 if len(term_system.dimensions) > len(system.dimensions):
                     system, term_system = term_system, system
-
-    def __repr__(self):
-        return "(\n" + "\n+".join(repr(t) for t in self.terms) + "\n)"
-
-    def __pow__(self, exp):
-        if isinstance(exp, int):
-            if exp == 0:
-                return 1
-            if exp == 1:
-                return self
-            if exp > 1:
-                exp -= 1
-                return self * (self**exp)
-            else:
-                TypeError("NBodyOperator does not support negative powers")
-        raise TypeError(
-            f"unsupported operand type(s) for ** or pow(): 'NBodyOperator' and '{type(exp).__name__}'"
-        )
 
     def __add__(self, op):
         if isinstance(op, (int, float, complex)):
@@ -478,11 +494,21 @@ class NBodyOperator(Operator):
         # TODO: cancel terms
         new_terms = [t for t in new_terms if t.prefactor != 0]
         return NBodyOperator(new_terms)
-
-    def __rmul__(self, op):
-        if isinstance(op, (int, float, complex)):
-            return self * op
-        return NotImplementedError
+                    
+    def __pow__(self, exp):
+        if isinstance(exp, int):
+            if exp == 0:
+                return 1
+            if exp == 1:
+                return self
+            if exp > 1:
+                exp -= 1
+                return self * (self**exp)
+            else:
+                TypeError("NBodyOperator does not support negative powers")
+        raise TypeError(
+            f"unsupported operand type(s) for ** or pow(): 'NBodyOperator' and '{type(exp).__name__}'"
+        )
 
     def __mul__(self, op):
         if isinstance(op, (int, float, complex)):
@@ -506,11 +532,25 @@ class NBodyOperator(Operator):
             return new_terms[0]
         return NBodyOperator(new_terms)
 
+    def __repr__(self):
+        return "(\n" + "\n+".join(repr(t) for t in self.terms) + "\n)"
+
+    def __rmul__(self, op):
+        if isinstance(op, (int, float, complex)):
+            return self * op
+        return NotImplementedError
+    
     def dag(self):
         """return the adjoint operator"""
         return NBodyOperator([t.dag() for t in self.terms])
 
+    def partial_trace(self, sites: list):
+        return sum(t.partial_trace(sites) for t in self.terms)
+
     def to_qutip(self):
         if len(self.terms) == 0:
-            return 0
+            return ProductOperator({}, 0, self.system).to_qutip()
         return sum(t.to_qutip() for t in self.terms)
+
+    def tr(self):
+        return sum([t.tr() for t in self.terms])
