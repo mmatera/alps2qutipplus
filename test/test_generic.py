@@ -89,7 +89,7 @@ def test_all():
             )
             try:
                 system = SystemDescriptor(g, model, {})
-                print(system.global_operators.keys())
+                print(system.operators["global_operators"].keys())
             except Exception as e:
                 # assert False, f"model {model_name} over graph {graph_name} could not be loaded due to {type(e)}:{e}"
                 print("   ", graph_name, "  [failed]", e)

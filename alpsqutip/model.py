@@ -8,6 +8,7 @@ import qutip
 
 from alpsqutip.geometry import GraphDescriptor
 from alpsqutip.utils import eval_expr
+from alpsqutip.settings import VERBOSITY_LEVEL
 
 
 class SystemDescriptor:
@@ -363,7 +364,8 @@ class SystemDescriptor:
             site_terms = [self.site_term_from_site_term_descriptor(term_spec, graph, parms)
                           for term_spec in op_descr["site terms"]]
         except ValueError as exc:
-            print(*exc.args, f"Aborting evaluation of {name}.")
+            if VERBOSITY_LEVEL > 2:
+                print(*exc.args, f"Aborting evaluation of {name}.")
             model.global_ops.pop(name)
             return None
 
@@ -372,7 +374,8 @@ class SystemDescriptor:
             bond_terms = [self.bond_term_from_site_term_descriptor(term_spec, graph, model, parms)
                           for term_spec in op_descr["bond terms"]]
         except ValueError as exc:
-            print(*exc.args, f"Aborting evaluation of {name}.")
+            if VERBOSITY_LEVEL > 2:
+                print(*exc.args, f"Aborting evaluation of {name}.")
             model.global_ops.pop(name)
             return None
         result = sum(site_terms) + sum(bond_terms)
@@ -389,17 +392,28 @@ class Operator:
         raise NotImplementedError()
 
     def __sub__(self, operand):
+        if operand is None:
+            raise ValueError("None can not be an operand")
+        
         neg_op = -operand
         return self + neg_op
 
     def __radd__(self, operand):
+        if operand is None:
+            raise ValueError("None can not be an operand")
         return self + operand
 
     def __rsub__(self, operand):
+        if operand is None:
+            raise ValueError("None can not be an operand")
+        
         neg_self = -self
         return operand + neg_self
 
     def __pow__(self, exponent):
+        if exponent is None:
+            raise ValueError("None can not be an operand")
+
         return self.to_qutip_operator()**exponent
 
     def _repr_latex_(self):

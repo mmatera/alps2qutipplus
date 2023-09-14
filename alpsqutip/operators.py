@@ -620,10 +620,6 @@ class SumOperator(Operator):
         
         qutip_term = sum(qutip_terms)
         qutip_terms = qutip_term if qutip_terms else []
-        print({"general":general_terms,
-               "loc":loc_ops_lst, 
-                 "Qutip":qutip_terms}
-                 )
         terms = (general_terms +
                  loc_ops_lst +
                  qutip_terms

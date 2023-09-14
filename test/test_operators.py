@@ -145,16 +145,6 @@ def test_local_operator():
 def test_product_operator():
     """Tests for product operators"""
 
-    print("sxA")
-    print(sxA)
-    print("syB")
-    print(syB)
-
-    print("sxA syB")
-    print(sxAsyB)
-    print("Global op")
-    print(opglobal)
-
     assert (sxAsyB*sxA*syB).tr() == .25 * 2**(CHAIN_SIZE-2)
     assert (opglobal*sxA*syB).tr() == .5 * 2**(CHAIN_SIZE-2)
     assert (sxAsyB_times_2 * sxAsyB_times_2).tr() == 2**(CHAIN_SIZE-2)

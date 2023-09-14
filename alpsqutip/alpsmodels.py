@@ -70,7 +70,8 @@ def build_local_basis_from_qn_descriptors(
         local_basis = new_basis
 
     if len(local_basis) == 1 and len(local_basis[0]) == 0:
-        print("empty basis!")
+        if VERBOSITY_LEVEL>0:   
+            print("empty basis!")
         return None
     qn_indx = {qn: i for i, qn in enumerate(local_basis[0].keys())}
     basis_vectors = [
@@ -286,7 +287,8 @@ def model_from_alps_xml(filename="lattices.xml", name="spin", parms=None):
                     terms.append((dst, src, coeff, fermionic))
 
             if any(t[-1] for t in terms) and not all(t[-1] for t in terms):
-                print("wrong fermionic parity", name, ":", terms)
+                if VERBOSITY_LEVEL>0:
+                    print("wrong fermionic parity", name, ":", terms)
                 continue
             operators[name] = sum(
                 coeff * qutip.projection(dim, src, dst)

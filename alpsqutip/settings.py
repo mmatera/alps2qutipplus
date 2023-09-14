@@ -23,3 +23,6 @@ ROOT_DIR = get_srcdir()
 FIGURES_DIR = f"{ROOT_DIR}/doc/figs"
 LATTICE_LIB_FILE = f"{ROOT_DIR}/lib/lattices.xml"
 MODEL_LIB_FILE = f"{ROOT_DIR}/lib/models.xml"
+
+# set the level of verbosity in the warnings and error messages
+VERBOSITY_LEVEL = 1
