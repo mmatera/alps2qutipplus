@@ -1,15 +1,29 @@
+"""
+Density operator classes
+"""
+from functools import reduce
 from typing import Optional
 import numpy as np
 
-from alpsqutip.model import SystemDescriptor, NBodyOperator, Operator, ProductOperator
+from alpsqutip.model import SystemDescriptor, Operator
+from alpsqutip.operators import LocalOperator, OneBodyOperator, ProductOperator, SumOperator
 
 
 class DensityOperatorMixin:
+    """
+    DensityOperatorMixin is a Mixing class that
+    contributes operator subclasses with the method
+    `expect`.
+    """
+
     def expect(self, obs):
+        """Compute the expectation value of an observable"""
         return (self * obs).tr()
 
 
 class ProductDensityOperator(ProductOperator, DensityOperatorMixin):
+    """An uncorrelated density operator"""
+
     def __init__(
         self,
         local_states: dict,
@@ -20,23 +34,23 @@ class ProductDensityOperator(ProductOperator, DensityOperatorMixin):
         assert weight >= 0
         sites = tuple(system.sites.keys() if system else local_states.keys())
         dimensions = system.dimensions
-        zs = {
+        local_zs = {
             site: (local_states[site].tr()
-            if site in local_states
-            else dimensions[site])
+                   if site in local_states
+                   else dimensions[site])
             for site in sites
         }
 
         if normalize:
-            assert (z > 0 for z in zs.values())
+            assert (z > 0 for z in local_zs.values())
             local_states = {site:
-                sigma / zs[site] for site, sigma in local_states.items()
-            }
-            for z in zs.values():
-                weight /= z
+                            sigma / local_zs[site] for site, sigma in local_states.items()
+                            }
+            for local_z in local_zs.values():
+                weight /= local_z
 
         super().__init__(local_states, prefactor=weight, system=system)
-        self.fs = {site: -np.log(z) for site, z in zs.items()}
+        self.local_fs = {site: -np.log(z) for site, z in local_zs.items()}
 
     def expect(self, obs: Operator):
         sites_obs = obs.sites_op
@@ -45,8 +59,8 @@ class ProductDensityOperator(ProductOperator, DensityOperatorMixin):
             (local_states[site] * op).tr() for site, op in sites_obs.items()
         ]
         result = 1
-        for f in factors:
-            result *= f
+        for local_f in factors:
+            result *= local_f
         return result
 
     def partial_trace(self, sites: list):
@@ -99,10 +113,10 @@ class ProductDensityOperator(ProductOperator, DensityOperatorMixin):
                 site, sigma = next(sites_op.items())
                 other_sigma = other_sites_op.get(site, None)
                 if other_sigma is not None:
-                    a, b = self.prefactor, rho.prefactor
-                    new_prefactor = a + b
-                    a, b = a / new_prefactor, b / new_prefactor
-                    new_sigma = a * sigma + b * other_sigma
+                    a_float, b_float = self.prefactor, rho.prefactor
+                    new_prefactor = a_float + b_float
+                    a_float, b_float = a_float / new_prefactor, b_float / new_prefactor
+                    new_sigma = a_float * sigma + b_float * other_sigma
                     return ProductDensityOperator(
                         {
                             site: new_sigma,
@@ -119,20 +133,20 @@ class ProductDensityOperator(ProductOperator, DensityOperatorMixin):
     def __mul__(self, a):
         if isinstance(a, float):
             if a > 0:
-                return SeparableDensityOperator(
-                    [
-                        ProductDensityOperator(
-                            t.sites_op, t.prefactor * a, t.system, False
-                        )
-                        for t in self.terms
-                    ]
+                return ProductDensityOperator(
+                    self.sites_op, self.prefactor * a, self.system, False
                 )
+
             if a == 0.0:
                 return ProductDensityOperator({}, a, self.system, False)
         return super().__mul__(a)
 
 
-class SeparableDensityOperator(NBodyOperator, DensityOperatorMixin):
+class SeparableDensityOperator(SumOperator, DensityOperatorMixin):
+    """
+    A mixture of product operators
+    """
+
     def __init__(self, terms: list):
         assert (isinstance(t, ProductDensityOperator) for t in terms)
         super().__init__(terms)
@@ -153,12 +167,10 @@ class SeparableDensityOperator(NBodyOperator, DensityOperatorMixin):
         if isinstance(rho, SeparableDensityOperator):
             return SeparableDensityOperator(self.terms + rho.terms)
         if isinstance(rho, ProductDensityOperator):
-            return SeparableDensityOperator
-        (self.terms + [rho])
+            return SeparableDensityOperator(self.terms + [rho])
         if isinstance(rho, float):
             return SeparableDensityOperator(
-                self.terms
-                + [
+                self.terms + [
                     ProductDensityOperator(
                         {}, rho, self.terms[0].system, False
                     )
@@ -179,126 +191,72 @@ class SeparableDensityOperator(NBodyOperator, DensityOperatorMixin):
         return super().__mul__(a)
 
 
-"""
-class QuantumState:
-    def expect(self, op):
-        if isinstance(op, (int, float, complex)):
-            return op
-        if isinstance(op, NBodyOperator):
-            return sum([self.expect(t) for t in op.terms])
-        if isinstance(op, ProductOperator):
-            return self._compute_expect_over_product_operator(op)
-        raise NotImplementedError
+class GibbsDensityOperator(Operator, DensityOperatorMixin):
+    """
+    stores an operator of the form rho=exp(-K)/Tr(exp(-K))
+    """
 
+    def __init__(self, K: Operator, system: SystemDescriptor = None):
+        self.K = K
+        self.system = system or K.system
 
-class ProductQuantumState(QuantumState, ProductOperator):
-    def __init__(
-        self, local_states, system, weight=1, normalize_local_states=True
-    ):
-        super(ProductQuantumState, self).__init__(
-            sites_op=local_states, prefactor=1, system=system
-        )
-        self.weight = weight
-        # Normalize local states and adjust the prefactor
-        local_states = self.sites_op
-        normalization = reduce(
-            lambda x, y: x * y,
-            (d for s, d in system.dimensions.items() if s not in local_states),
-            1.0,
-        )
-
-        if normalize_local_states:
-            for s, op in local_states.items():
-                local_trace = op.tr()
-                if local_trace <= 0:
-                    raise ValueError(f"Non-positive trace on site {s}")
-                local_states[s] = op / local_trace
-
-        self.prefactor = weight / normalization
-
-    def _compute_expect_over_product_operator(self, op):
-        dimensions = self.system.dimensions
-        site_ops = op.sites_op
-        site_states = self.sites_op
-        factors = [
-            (site_ops[s] * site_states[s]).tr()
-            if s in site_states
-            else site_ops[s].tr() / dimensions[s]
-            for s in site_ops
-        ]
-        return reduce(lambda x, y: x * y, factors, op.prefactor)
+    def __neg__(self):
+        return -self.to_qutip_operator()
 
     def partial_trace(self, sites):
-        sites_op = self.sites_op
-        sites = [s for s in sites if s in self.system.sites]
-        system = self.system.subsystem(sites)
-        sites_op = {s: sites_op[s] for s in sites if s in sites_op}
-        return ProductQuantumState(
-            sites_op,
-            system=system,
-            weight=self.weight,
-            normalize_local_states=False,
-        )
+        return self.to_qutip_operator().partial_trace(sites)
 
-    def __add__(self, op):
-        system = self.system
-        if isinstance(op, (int, float)):
-            if op == 0:
-                return self
-            if op > 0:
-                rho = ProductQuantumState({}, system, weight=op)
-                return MixedQuantumState([self, rho])
-        elif isinstance(op, ProductQuantumState):
-            if op.prefactor == 0:
-                return self
-            return MixedQuantumState([self, op])
-        elif isinstance(op, MixedQuantumState):
-            return MixedQuantumState([self] + op.terms)
-        return super(ProductQuantumState, self).__add__(op)
-
-    def __mul__(self, op):
-        system = self.system
-        if isinstance(op, (int, float)) and op >= 0:
-            rho = ProductQuantumState(
-                self.sites_op.copy(), system, weight=op * self.weight
-            )
-            return rho
-
-        return super(ProductQuantumState, self).__mul__(op)
+    def to_qutip(self):
+        # TODO: add offset to the lowest eigenvalue
+        rho_qutip = (-self.K).to_qutip().expm()
+        return rho_qutip / rho_qutip.tr()
 
 
-class MixedQuantumState(QuantumState, NBodyOperator):
-    def __init__(self, terms):
-        super(MixedQuantumState, self).__init__(terms)
+class GibbsProductDensityOperator(Operator, DensityOperatorMixin):
+    """
+    stores an operator of the form rho=\\otimes_i exp(-K_i)/Tr(exp(-K_i))
+    """
 
-    def __add__(self, op):
-        system = self.system
-        if isinstance(op, (int, float)):
-            if op > 0:
-                rho = ProductQuantumState({}, system, weight=op)
-                return MixedQuantumState(self.terms + [rho])
-            elif op == 0:
-                return self
-        elif isinstance(op, ProductQuantumState):
-            if op.prefactor == 0:
-                return self
-            return MixedQuantumState(self.terms + [op])
-        elif isinstance(op, MixedQuantumState):
-            return MixedQuantumState(self.terms + op.terms)
-        return super(MixedQuantumState, self).__add__(op)
+    def __init__(self, K: Operator, system: SystemDescriptor = None, normalize=True):
+        if isinstance(K, LocalOperator):
+            if normalize:
+                self.k_by_site = {K.site: K.operator+np.log(K.expm().tr())}
+            else:
+                self.k_by_site = {K.site: K.operator}
+        elif isinstance(K, OneBodyOperator):
+            k_by_site = {k_local.site: k_local.operator for k_local in K.terms}
+            if normalize:
+                k_by_site = {
+                    site: local_k + np.log(K.expm().tr()) for site, local_k in k_by_site.values()}
+            self.k_by_syte = k_by_site
+        else:
+            raise ValueError
 
-    def __mul__(self, op):
-        if isinstance(op, (int, float)) and op >= 0:
-            return MixedQuantumState([t * op for t in self.terms])
+        self.system = system or K.system
 
-        return super(MixedQuantumState, self).__mul__(op)
+    def expect(self, operator):
+        # TODO: write a better implementation
+        return self.to_product_state().expect(operator)
 
-    def _compute_expect_over_product_operator(self, op):
-        return sum(
-            t.weight * t._compute_expect_over_product_operator(op)
-            for t in self.terms
-        )
+    def partial_trace(self, sites):
+        sites = [site for site in sites if site in self.system.dimensions]
+        subsystem = self.system.subsystem(sites)
+        return GibbsProductDensityOperator({self.k_by_site[site] for site in sites},
+                                           subsystem, False)
 
-    def partial_trace(self, sites: list):
-        return sum(t.partial_trace(sites) for t in self.terms)
-"""
+    def to_product_state(self):
+        """Convert the operator in a productstate"""
+
+        dimensions = self.system.dimensions
+        global_z = reduce(
+            lambda x, y: x*y, [dim for site, dim in dimensions.values() if site not in self.k_by_site])
+
+        return ProductDensityOperator({site: (-local_k).expm() for site, local_k in self.k_by_site.values()},
+                                      1./global_z, system=self.system, normalize=False)
+
+    def __neg__(self):
+        return -self.to_product_state()
+
+    def to_qutip(self):
+        # TODO: add offset to the lowest eigenvalue
+        return self.to_product_state().to_qutip()

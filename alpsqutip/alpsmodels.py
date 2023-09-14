@@ -131,8 +131,8 @@ def model_from_alps_xml(filename="lattices.xml", name="spin", parms=None):
                 parms_and_ops["x"] = 0
                 parms_and_ops.update(
                     {
-                        f"{op}_qutip": qtip_op
-                        for op, qtip_op in operators.items()
+                        f"{op}_qutip": qutip_op
+                        for op, qutip_op in operators.items()
                     }
                 )
                 expr = "".join(line.strip() for line in node.itertext())
@@ -362,10 +362,28 @@ class ModelDescriptor:
         parms: dict = {},
     ):
         self.site_basis = site_basis
-        self.constraints = constraints
-        self.bond_ops = bond_op_descr
-        self.global_ops = global_op_descr
-        self.parms = parms
+        self.constraints = constraints or {}
+        self.bond_ops = bond_op_descr or {}
+        self.global_ops = global_op_descr or {}
+        self.parms = parms or {}
 
     def __repr__(self):
         return repr(self.__dict__)
+
+
+
+
+def qutip_model_from_dims(dims, local_ops=None, global_ops=None):
+    site_basis = {}
+    for i, d in enumerate(dims):
+        name = f"qutip_{i}"
+        site_basis[name] = {
+            "name": name,
+            "qn": {"n"},
+            "dimension": d,
+            "operators": {"n":qutip.num(d), "GS":qutip.projection(d,0,0), "raise":qutip.create(d), "lower":qutip.destroy(d)},
+            "parms": {},
+            "localstates": [{"n":i} for i in range(d)],
+        }
+    return ModelDescriptor(site_basis)
+

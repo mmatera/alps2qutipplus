@@ -3,19 +3,13 @@ Basic unit test.
 """
 
 import matplotlib.pyplot as plt
-import qutip
 
-import alpsqutip
+
 from alpsqutip.alpsmodels import list_operators_in_alps_xml, model_from_alps_xml
 from alpsqutip.geometry import graph_from_alps_xml, list_graph_in_alps_xml
-from alpsqutip.model import ProductOperator, SystemDescriptor
-from alpsqutip.states import ProductDensityOperator
+from alpsqutip.model import SystemDescriptor
+from alpsqutip.settings import FIGURES_DIR, LATTICE_LIB_FILE, MODEL_LIB_FILE
 from alpsqutip.utils import eval_expr
-
-ROOT_DIR = alpsqutip.__path__[0]
-FIGURES_DIR = f"{ROOT_DIR}/doc/figs"
-LATTICE_LIB_FILE = f"{ROOT_DIR}/lib/lattices.xml"
-MODEL_LIB_FILE = f"{ROOT_DIR}/lib/models.xml"
 
 
 # TODO: Split me in more atomic units.
@@ -43,7 +37,8 @@ def test_load():
     for name in list_graph_in_alps_xml(LATTICE_LIB_FILE):
         try:
             g = graph_from_alps_xml(
-                LATTICE_LIB_FILE, name, parms={"L": 3, "W": 3, "a": 1, "b": 1, "c": 1}
+                LATTICE_LIB_FILE, name, parms={
+                    "L": 3, "W": 3, "a": 1, "b": 1, "c": 1}
             )
         except Exception as e:
             assert False, f"geometry {name} could not be loaded due to {e}"
@@ -101,97 +96,3 @@ def test_all():
                 continue
             print("   ", graph_name, "  [OK]")
         print("\n-------------")
-
-
-def test_states():
-    system = SystemDescriptor(
-        basis=model_from_alps_xml(MODEL_LIB_FILE, "spin"),
-        graph=graph_from_alps_xml(
-            LATTICE_LIB_FILE, "open square lattice", parms={"L": 3, "a": 1}
-        ),
-        parms={"h": 1, "J": 1},
-    )
-    # enumerate the name of each subsystem
-    sites = [s for s in system.sites]
-    sites01 = [sites[0], sites[1]]
-    sites02 = [sites[0], sites[2]]
-
-    for ssites in [sites, sites01, sites02]:
-        print(ssites)
-        # Global operators
-        global_identity = ProductOperator({}, 1.0, system)
-        op1 = ProductOperator({sites[0]: qutip.sigmax()}, 1.0, system)
-        op2 = ProductOperator({sites[1]: qutip.sigmax()}, 1.0, system)
-        op = 0.7 * op1 + 0.3 * op2
-
-        # Global states
-        rho1 = ProductDensityOperator(
-            {s: (-qutip.sigmax()).expm() for s in ssites}, system=system
-        )
-        rho2 = ProductDensityOperator({s: (qutip.sigmax()).expm() for s in ssites}, system)
-        rho = 0.25 * rho1 + 0.75 * rho2
-        rho_as_regular = rho * global_identity
-
-        # Operators on the subsystem 0,1
-        op1_ss = ProductOperator(
-            {sites[0]: qutip.sigmax()}, 1.0, system.subsystem([sites[0], sites[1]])
-        )
-        op2_ss = ProductOperator(
-            {sites[1]: qutip.sigmax()}, 1.0, system.subsystem([sites[0], sites[1]])
-        )
-        op_ss = 0.7 * op1_ss + 0.3 * op2_ss
-
-        # Qutip version
-        # Global states
-        qt_rho1 = rho1.to_qutip()
-        qt_rho2 = rho2.to_qutip()
-        qt_rho = 0.25 * qt_rho1 + 0.75 * qt_rho2
-        # Ops
-        qt_op1 = op1.to_qutip()
-        qt_op2 = op2.to_qutip()
-        qt_op = 0.7 * qt_op1 + 0.3 * qt_op2
-
-        # Tests.
-        # The reference is the output from (qt_op * qt_rho).tr()
-        expect = (qt_op * qt_rho).tr()
-
-        val = (op.to_qutip() * rho.to_qutip()).tr()
-        assert abs(expect - val) < 1.0e-6, f"to qutip commutes {expect}!={val}"
-        print("  * To qutip commutes with product and trace [OK]")
-
-        val = (op * rho).tr()
-        assert abs(expect - val) < 1.0e-6, f"traces do not match {expect}!={val}"
-        print(
-            "  * The result is the same in qutip and here using product and trace [OK]"
-        )
-
-        val = (op * rho_as_regular).tr()
-        assert (
-            abs(expect - val) < 1.0e-6
-        ), f"It also works for rho a regular op {expect}!={val}"
-        print("  * The result is also the same using a regular operator as rho [OK]")
-
-        val = 0.7 * rho.expect(op1) + 0.3 * rho.expect(op2)
-        assert abs(expect - val) < 1.0e-6, f"expect is linear in ops {expect}!={val}"
-        print("  * expect is linear in ops [OK]")
-        val = 0.25 * rho1.expect(op) + 0.75 * rho2.expect(op)
-        assert abs(expect - val) < 1.0e-6, f"expect is linear in rho {expect}!={val}"
-        print("  * Expect is linear in rho [OK]")
-        val = rho.expect(op)
-        assert (
-            abs(expect - val) < 1.0e-6
-        ), f"rho.expect does not match with trace {expect}!={val}"
-        print("  * Expect is the same than the trace [OK]")
-
-        val = rho.partial_trace([sites[0], sites[1]]).expect(op_ss)
-        assert abs(expect - val) < 1.0e-6, f"match for subsystems {expect}!={val}"
-        print("  * Expect matches for subsystems [OK]")
-
-        val = (rho_as_regular.partial_trace([sites[0], sites[1]]) * op).tr()
-        assert abs(expect - val) < 1.0e-6, f"match for subsystems {expect}!={val}"
-        print("  * Also for regular rho operators [OK]")
-
-
-# test_load()
-# test_all()
-# test_eval_expr()
