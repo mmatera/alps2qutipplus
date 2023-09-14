@@ -28,11 +28,28 @@ sxAsyB = sxA*syB
 sxAsyB_times_2 = 2 * sxAsyB
 opglobal = szC + sxAsyB_times_2
 
+sz_total = system_descriptor.global_operator("Sz")
+hamiltonian = system_descriptor.global_operator("Hamiltonian")
+
 
 def check_operator_equality(op1, op2):
     """check if two operators are numerically equal"""
     op_diff = op1-op2
     return (op_diff.dag()*op_diff).tr() < 1.e-9
+
+
+
+
+def test_build_hamiltonian():
+    """build ham"""
+    assert sz_total is not None
+    assert hamiltonian is not None
+    hamiltonian_with_field = hamiltonian + sz_total
+    assert check_operator_equality( (hamiltonian_with_field ).to_qutip(),
+                                    (hamiltonian.to_qutip() + sz_total.to_qutip())
+                                   )
+    
+
 
 
 def test_type_operator():

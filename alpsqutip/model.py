@@ -256,10 +256,12 @@ class SystemDescriptor:
         #    self.bond_operators[(name, src, dst,)] = None
         return None
 
-    def site_term_from_site_term_descriptor(self, term_spec, graph, parms):
+    def site_term_from_descriptor(self, term_spec, graph, parms):
         """Build a site term from a site term specification"""
+        from alpsqutip.operators import SumOperator        
         expr = term_spec["expr"]
         site_type = term_spec.get("type", None)
+        term_ops = []
         t_parm = {}
         t_parm.update(term_spec.get("parms", {}))
         if parms:
@@ -284,10 +286,11 @@ class SystemDescriptor:
             term_op = eval_expr(s_expr, s_parm)
             if term_op is None or isinstance(term_op, str):
                 raise ValueError(f"<<{s_expr}>> could not be evaluated.")
+            term_ops.append(term_op)
 
-            return term_op
+        return SumOperator(term_ops, self)
 
-    def bond_term_from_site_term_descriptor(self, term_spec, graph, model, parms):
+    def bond_term_from_descriptor(self, term_spec, graph, model, parms):
         """Build a bond term from a bond term speficication"""
         from alpsqutip.operators import SumOperator
 
@@ -297,13 +300,14 @@ class SystemDescriptor:
                 key.replace("#", f"{edge_type}"): val
                 for key, val in t_parm.items()
             }
-            for op_idx in (src, dst):
+            for op_idx in ([src, "src"], [dst, "dst"]):
                 e_parms.update(
                     {
-                        f"{key}__src": val
-                        for key, val in self.operators["site_operators"][op_idx].items()
+                        f"{key}__{op_idx[1]}": val
+                        for key, val in self.operators["site_operators"][op_idx[0]].items()
                     }
                 )
+
             # Try to compute using only site terms
             term_op = eval_expr(e_expr, e_parms)
             if not isinstance(term_op, str):
@@ -341,13 +345,14 @@ class SystemDescriptor:
                     e_expr, (edge_type, src, dst), model, t_parm)
                 if isinstance(term_op, str):
                     raise ValueError(
-                        f"Bond term <<{e_expr}>> could not be evaluated.")
+                        f"   Bond term <<{term_op}>> could not be evaluated.")
 
                 result_terms.append(term_op)
         return SumOperator(result_terms)
 
     def global_operator(self, name):
         """Return a global operator by its name"""
+        from alpsqutip.operators import SumOperator
         result = self.operators["global_operators"].get(name, None)
         if result is not None:
             return result
@@ -361,8 +366,9 @@ class SystemDescriptor:
         model = self.spec["model"]
         # Process site terms
         try:
-            site_terms = [self.site_term_from_site_term_descriptor(term_spec, graph, parms)
+            site_terms = [self.site_term_from_descriptor(term_spec, graph, parms)
                           for term_spec in op_descr["site terms"]]
+            site_terms = [term for term in site_terms if term]
         except ValueError as exc:
             if VERBOSITY_LEVEL > 2:
                 print(*exc.args, f"Aborting evaluation of {name}.")
@@ -371,14 +377,17 @@ class SystemDescriptor:
 
         # Process bond terms
         try:
-            bond_terms = [self.bond_term_from_site_term_descriptor(term_spec, graph, model, parms)
+            bond_terms = [self.bond_term_from_descriptor(term_spec, graph, model, parms)
                           for term_spec in op_descr["bond terms"]]
+            bond_terms = [term for term in bond_terms if term]
+
         except ValueError as exc:
             if VERBOSITY_LEVEL > 2:
                 print(*exc.args, f"Aborting evaluation of {name}.")
             model.global_ops.pop(name)
             return None
-        result = sum(site_terms) + sum(bond_terms)
+
+        result = SumOperator(site_terms + bond_terms, self)
         self.operators["global_operators"][name] = result
         return result
 
@@ -394,7 +403,7 @@ class Operator:
     def __sub__(self, operand):
         if operand is None:
             raise ValueError("None can not be an operand")
-        
+
         neg_op = -operand
         return self + neg_op
 
@@ -406,7 +415,7 @@ class Operator:
     def __rsub__(self, operand):
         if operand is None:
             raise ValueError("None can not be an operand")
-        
+
         neg_self = -self
         return operand + neg_self
 
@@ -466,6 +475,7 @@ class Operator:
 
 
 def build_spin_chain(l: int = 2):
+    """Build a spin chain of length `l`"""
     from alpsqutip.alpsmodels import model_from_alps_xml
     from alpsqutip.geometry import graph_from_alps_xml
     from alpsqutip.settings import LATTICE_LIB_FILE, MODEL_LIB_FILE
@@ -475,5 +485,5 @@ def build_spin_chain(l: int = 2):
         graph=graph_from_alps_xml(
             LATTICE_LIB_FILE, "chain lattice", parms={"L": l, "a": 1}
         ),
-        parms={"h": 1, "J": 1},
+        parms={"h": 1, "J": 1, "Jz0": 1, "Jxy0": 1},
     )

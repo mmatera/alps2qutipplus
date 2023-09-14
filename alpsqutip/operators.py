@@ -9,6 +9,7 @@ from qutip import Qobj
 from alpsqutip.alpsmodels import qutip_model_from_dims
 from alpsqutip.geometry import GraphDescriptor
 from alpsqutip.model import Operator, SystemDescriptor
+from alpsqutip.settings import VERBOSITY_LEVEL
 
 
 class QutipOperator(Operator):
@@ -72,15 +73,14 @@ class QutipOperator(Operator):
 
     def __pow__(self, exponent):
         operator = self.operator
-        if exponent<0:
+        if exponent < 0:
             operator = operator.inv()
             exponent = -exponent
-            
+
         return QutipOperator(operator**exponent,
                              system=self.system,
                              names=self.site_names,
                              prefactor=1/self.prefactor)
-        
 
     def dag(self):
         prefactor = self.prefactor
@@ -160,7 +160,8 @@ class LocalOperator(Operator):
         try:
             result = operand + self
         except RecursionError:
-            print("recursion error", type(operand), type(self))
+            if VERBOSITY_LEVEL > 0:
+                print("recursion error", type(operand), type(self))
             import sys
             sys.exit()
         return result
@@ -213,10 +214,10 @@ class LocalOperator(Operator):
 
     def __pow__(self, exp):
         operator = self.operator
-        if exp<0 and hasattr(operator, "inv"):
+        if exp < 0 and hasattr(operator, "inv"):
             operator = operator.inv()
             exp = -exp
-        
+
         return LocalOperator(self.site,
                              operator**exp,
                              self.system
@@ -237,16 +238,14 @@ class LocalOperator(Operator):
     def expm(self):
         return LocalOperator(self.site, self.operator.expm(), self.system)
 
-
     def inv(self):
         operator = self.operator
         system = self.system
         site = self.site
         return LocalOperator(site,
-                         operator.inv() if hasattr(operator, "inv") else 1/operator,
-                         system
-                         )
-        
+                             operator.inv() if hasattr(operator, "inv") else 1/operator,
+                             system
+                             )
 
     def partial_trace(self, sites: list):
         system = self.system
@@ -282,10 +281,10 @@ class LocalOperator(Operator):
             operator = qutip.qeye(dimensions[site])*operator
         elif isinstance(operator, Operator):
             operator = operator.to_qutip()
-        
+
         return qutip.tensor([operator if s == site else
-                       qutip.qeye(d)
-                       for s, d in dimensions.items()])
+                             qutip.qeye(d)
+                             for s, d in dimensions.items()])
 
     def tr(self):
         result = self.partial_trace([])
@@ -304,13 +303,13 @@ class ProductOperator(Operator):
         remove_numbers = False
         for site, op in sites_operators.items():
             if isinstance(op, (int, float, complex)):
-                prefactor *=op
+                prefactor *= op
                 remove_numbers = True
-                
+
         if remove_numbers:
-            sites_operators = {s:op for s, op in sites_operators.items() if not isinstance(op, (int, float, complex))}
-        
-        
+            sites_operators = {s: op for s, op in sites_operators.items(
+            ) if not isinstance(op, (int, float, complex))}
+
         self.sites_op = sites_operators
         if any(op.data.count_nonzero() == 0 for op in sites_operators.values()):
             prefactor = 0
@@ -494,7 +493,7 @@ class SumOperator(Operator):
     def __init__(self, terms_coeffs: list, system=None):
         self.terms = terms_coeffs
         assert all(isinstance(t, Operator) for t in terms_coeffs)
-        
+
         if system is None and terms_coeffs:
             for term in terms_coeffs:
                 if system is None:
@@ -513,10 +512,14 @@ class SumOperator(Operator):
             if operand.prefactor == 0:
                 return self
             new_terms = self.terms + [operand]
+        elif isinstance(operand, LocalOperator):
+            new_terms = self.terms + [operand]
         elif isinstance(operand, SumOperator):
             if len(operand.terms) == len(self.terms) == 1:
                 return self.terms[0] + operand.terms[0]
             new_terms = self.terms + operand.terms
+        else:
+            raise ValueError(type(self), type(operand))
 
         new_terms = [t for t in new_terms if t]
         return SumOperator(new_terms).simplify()
@@ -617,7 +620,7 @@ class SumOperator(Operator):
 
         loc_ops_lst = [LocalOperator(site, sum(l_ops), system)
                        for site, l_ops in site_terms.items()]
-        
+
         qutip_term = sum(qutip_terms)
         qutip_terms = qutip_term if qutip_terms else []
         terms = (general_terms +
@@ -664,7 +667,8 @@ class OneBodyOperator(SumOperator):
                 if isinstance(term, ProductOperator):
                     n_factors = len(term.sites_op)
                     if n_factors > 1:
-                        raise ValueError("All the terms must be local")
+                        print("term", term)
+                        raise ValueError("All the terms must be local", term)
                     if n_factors == 0:
                         if term.system:
                             site = next(iter(term.system.sites))
@@ -716,11 +720,11 @@ class OneBodyOperator(SumOperator):
         if isinstance(operand, OneBodyOperator):
             my_terms = [term for term in self.terms if term]
             other_terms = [term for term in operand.terms if term]
-            return OneBodyOperator([
+            return SumOperator([
                 my_term*other_term for my_term in my_terms
                 for other_term in other_terms
             ], system)
-        if isinstance(operand, (int, float, complex, LocalOperator)):
+        if isinstance(operand, (int, float, complex)):
             if operand:
                 return OneBodyOperator([
                     term * operand for term in self.terms if term], system)
@@ -732,11 +736,11 @@ class OneBodyOperator(SumOperator):
         if isinstance(operand, OneBodyOperator):
             my_terms = self.terms
             other_terms = operand.terms
-            return OneBodyOperator([
+            return SumOperator([
                 other_term * my_term for my_term in my_terms
                 for other_term in other_terms
             ], system)
-        if isinstance(operand, (int, float, complex, LocalOperator)):
+        if isinstance(operand, (int, float, complex)):
             if operand:
                 return OneBodyOperator([
                     operand * term for term in self.terms if term
