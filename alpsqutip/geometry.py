@@ -3,7 +3,7 @@ Graphs and conversions from ALPS
 """
 
 import xml.etree.ElementTree as ET
-from typing import Tuple, Optional
+from typing import Optional, Tuple
 
 import numpy as np
 from numpy.random import rand
@@ -77,9 +77,7 @@ def graph_from_alps_xml(
             )
             edges[edge_items["type"]] = list_edges
 
-        return GraphDescriptor(
-            name=name, nodes=vertices, edges=edges, parms=parms
-        )
+        return GraphDescriptor(name=name, nodes=vertices, edges=edges, parms=parms)
 
     def process_lattice(node, parms):
         """Process a <LATTICE> node"""
@@ -166,8 +164,7 @@ def graph_from_alps_xml(
                 if coords is not None:
                     v_attr = v_attr.copy()
                     v_attr["coords"] = (
-                        sum(c * b for c, b in zip(cell, lattice_basis))
-                        + coords
+                        sum(c * b for c, b in zip(cell, lattice_basis)) + coords
                     )
 
                 vertices[f"{vertex}{list(cell)}"] = v_attr
@@ -176,9 +173,7 @@ def graph_from_alps_xml(
         for inhomogeneous in node.findall("./INHOMOGENEOUS"):
             for v_desc in inhomogeneous.findall("VERTEX"):
                 v_items = process_vertex(v_desc, parms)
-                v_name = v_items.get("name", None) or next_name(
-                    vertices, 1, "defect_"
-                )
+                v_name = v_items.get("name", None) or next_name(vertices, 1, "defect_")
                 vertices[v_name] = v_items
 
         # Build edges

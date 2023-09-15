@@ -1,11 +1,14 @@
 """
 Different representations for operators
 """
-import numpy as np
+from numbers import Number
 from functools import reduce
 from typing import List, Optional
+
+import numpy as np
 import qutip
 from qutip import Qobj
+
 from alpsqutip.alpsmodels import qutip_model_from_dims
 from alpsqutip.geometry import GraphDescriptor
 from alpsqutip.model import Operator, SystemDescriptor
@@ -15,22 +18,26 @@ from alpsqutip.settings import VERBOSITY_LEVEL
 class QutipOperator(Operator):
     """Represents a Qutip operator associated with a system"""
 
-    def __init__(self, qoperator: Qobj,
-                 system: Optional[SystemDescriptor] = None,
-                 names=None, prefactor=1):
+    def __init__(
+        self,
+        qoperator: Qobj,
+        system: Optional[SystemDescriptor] = None,
+        names=None,
+        prefactor=1,
+    ):
         if system is None:
             dims = qoperator.dims[0]
             model = qutip_model_from_dims(dims)
             if names is None:
                 names = {f"qutip_{i}": i for i in range(len(dims))}
             sitebasis = model.site_basis
-            sites = {s: sitebasis[f"qutip_{i}"]
-                     for i, s in enumerate(names)}
+            sites = {s: sitebasis[f"qutip_{i}"] for i, s in enumerate(names)}
 
-            graph = GraphDescriptor("disconnected graph",
-                                    {s: {"type": f"qutip_{i}"}
-                                     for i, s in enumerate(sites)},
-                                    {})
+            graph = GraphDescriptor(
+                "disconnected graph",
+                {s: {"type": f"qutip_{i}"} for i, s in enumerate(sites)},
+                {},
+            )
             system = SystemDescriptor(graph, model, sites=sites)
         if names is None:
             names = {s: i for i, s in enumerate(system.sites)}
@@ -42,33 +49,50 @@ class QutipOperator(Operator):
 
     def __add__(self, operand):
         if isinstance(operand, Operator):
-            return QutipOperator(self.prefactor * self.operator + operand.to_qutip(),
-                                 self.system, names=self.site_names)
+            return QutipOperator(
+                self.prefactor * self.operator + operand.to_qutip(),
+                self.system,
+                names=self.site_names,
+            )
         if isinstance(operand, (int, float, complex, Qobj)):
-            return QutipOperator(self.prefactor * self.operator + operand, self.system,
-                                 names=self.site_names)
+            return QutipOperator(
+                self.prefactor * self.operator + operand,
+                self.system,
+                names=self.site_names,
+            )
         raise ValueError()
 
     def __mul__(self, operand):
         if isinstance(operand, Operator):
-            return QutipOperator(self.prefactor * self.operator * operand.to_qutip(),
-                                 self.system, names=self.site_names)
+            return QutipOperator(
+                self.prefactor * self.operator * operand.to_qutip(),
+                self.system,
+                names=self.site_names,
+            )
         if isinstance(operand, (int, float, complex, Qobj)):
-            return QutipOperator(self.prefactor * self.operator * operand,
-                                 self.system, names=self.site_names)
+            return QutipOperator(
+                self.prefactor * self.operator * operand,
+                self.system,
+                names=self.site_names,
+            )
         raise ValueError()
 
     def __neg__(self):
-        return QutipOperator(-self.operator, self.system,
-                             names=self.site_names)
+        return QutipOperator(-self.operator, self.system, names=self.site_names)
 
     def __rmul__(self, operand):
         if isinstance(operand, Operator):
-            return QutipOperator(self.prefactor * operand.to_qutip() * self.operator,
-                                 self.system, names=self.site_names)
+            return QutipOperator(
+                self.prefactor * operand.to_qutip() * self.operator,
+                self.system,
+                names=self.site_names,
+            )
         if isinstance(operand, (int, float, complex, Qobj)):
-            return QutipOperator(self.prefactor * operand * self.operator, self.system,
-                                 names=self.site_names)
+            return QutipOperator(
+                self.prefactor * operand * self.operator,
+                self.system,
+                names=self.site_names,
+            )
         raise ValueError()
 
     def __pow__(self, exponent):
@@ -77,10 +101,12 @@ class QutipOperator(Operator):
             operator = operator.inv()
             exponent = -exponent
 
-        return QutipOperator(operator**exponent,
-                             system=self.system,
-                             names=self.site_names,
-                             prefactor=1/self.prefactor)
+        return QutipOperator(
+            operator**exponent,
+            system=self.system,
+            names=self.site_names,
+            prefactor=1 / self.prefactor,
+        )
 
     def dag(self):
         prefactor = self.prefactor
@@ -90,21 +116,23 @@ class QutipOperator(Operator):
         else:
             if operator.isherm:
                 return self
-        return QutipOperator(operator.dag(), self.system,
-                             self.site_names, prefactor)
+        return QutipOperator(operator.dag(), self.system, self.site_names, prefactor)
 
     def inv(self):
         """the inverse of the operator"""
         operator = self.operator
-        return QutipOperator(operator.inv(),
-                             system=self.system,
-                             names=self.site_names,
-                             prefactor=1/self.prefactor)
+        return QutipOperator(
+            operator.inv(),
+            system=self.system,
+            names=self.site_names,
+            prefactor=1 / self.prefactor,
+        )
 
     def partial_trace(self, sites: list):
         site_names = self.site_names
-        sites = sorted([s for s in self.site_names if s in sites],
-                       key=lambda s: site_names[s])
+        sites = sorted(
+            [s for s in self.site_names if s in sites], key=lambda s: site_names[s]
+        )
         subsystem = self.system.subsystem(sites)
         assert len(sites) == len(subsystem.sites)
         site_indxs = [site_names[s] for s in sites]
@@ -114,13 +142,15 @@ class QutipOperator(Operator):
         else:
             op_ptrace = self.operator.tr()
 
-        return QutipOperator(op_ptrace, subsystem, names=new_site_names, prefactor=self.prefactor)
+        return QutipOperator(
+            op_ptrace, subsystem, names=new_site_names, prefactor=self.prefactor
+        )
 
     def to_qutip(self):
         return self.operator * self.prefactor
 
     def tr(self):
-        return self.operator.tr()*self.prefactor
+        return self.operator.tr() * self.prefactor
 
 
 class LocalOperator(Operator):
@@ -129,10 +159,10 @@ class LocalOperator(Operator):
     """
 
     def __init__(
-            self,
-            site,
-            local_operator,
-            system: Optional[SystemDescriptor] = None,
+        self,
+        site,
+        local_operator,
+        system: Optional[SystemDescriptor] = None,
     ):
         assert isinstance(local_operator, (int, float, complex, Qobj))
         self.site = site
@@ -144,15 +174,18 @@ class LocalOperator(Operator):
         if isinstance(operand, LocalOperator):
             system = self.system or operand.system
             if site == operand.site:
-                return LocalOperator(site, self.operator+operand.operator,
-                                     system)
-            return OneBodyOperator([
-                LocalOperator(site, self.operator, system),
-                LocalOperator(operand.site, operand.operator,
-                              system)], system, check_and_convert=False)
+                return LocalOperator(site, self.operator + operand.operator, system)
+            return OneBodyOperator(
+                [
+                    LocalOperator(site, self.operator, system),
+                    LocalOperator(operand.site, operand.operator, system),
+                ],
+                system,
+                check_and_convert=False,
+            )
 
         if isinstance(operand, (int, float, complex)):
-            return LocalOperator(site, self.operator+operand, self.system)
+            return LocalOperator(site, self.operator + operand, self.system)
 
         if isinstance(operand, Qobj):
             return QutipOperator(operand) + self.to_qutip_operator()
@@ -163,6 +196,7 @@ class LocalOperator(Operator):
             if VERBOSITY_LEVEL > 0:
                 print("recursion error", type(operand), type(self))
             import sys
+
             sys.exit()
         return result
 
@@ -177,16 +211,14 @@ class LocalOperator(Operator):
         system = self.system or operand.system
         operator = self.operator
         if isinstance(operand, (int, float, complex, Qobj)):
-            return LocalOperator(site, operator*operand, system)
+            return LocalOperator(site, operator * operand, system)
         if isinstance(operand, LocalOperator):
             if site == operand.site:
-                return LocalOperator(site, operator*operand.operator,
-                                     system)
+                return LocalOperator(site, operator * operand.operator, system)
 
-            return ProductOperator({site: operator,
-                                    operand.site: operand.operator},
-                                   1.,
-                                   system=system)
+            return ProductOperator(
+                {site: operator, operand.site: operand.operator}, 1.0, system=system
+            )
         return ProductOperator({site: operator}, system=system) * operand
 
     def __rmul__(self, operand):
@@ -195,19 +227,17 @@ class LocalOperator(Operator):
         operator = self.operator
 
         if isinstance(operand, (int, float, complex, Qobj)):
-            return LocalOperator(site, operand*operator, system)
+            return LocalOperator(site, operand * operator, system)
         if isinstance(operand, LocalOperator):
             site = self.site
             system = self.system or operand.system
             if site == operand.site:
-                return LocalOperator(site, operand.operator*operator,
-                                     system)
+                return LocalOperator(site, operand.operator * operator, system)
 
-            return ProductOperator({site: operator,
-                                    operand.site: operand.operator},
-                                   1.,
-                                   system=system)
-        return operand*ProductOperator({site: operator}, system=system)
+            return ProductOperator(
+                {site: operator, operand.site: operand.operator}, 1.0, system=system
+            )
+        return operand * ProductOperator({site: operator}, system=system)
 
     def __neg__(self):
         return LocalOperator(self.site, -self.operator, self.system)
@@ -218,10 +248,7 @@ class LocalOperator(Operator):
             operator = operator.inv()
             exp = -exp
 
-        return LocalOperator(self.site,
-                             operator**exp,
-                             self.system
-                             )
+        return LocalOperator(self.site, operator**exp, self.system)
 
     def __repr__(self):
         return f"Local Operator on site {self.site}:\n {repr(self.operator)}"
@@ -242,10 +269,9 @@ class LocalOperator(Operator):
         operator = self.operator
         system = self.system
         site = self.site
-        return LocalOperator(site,
-                             operator.inv() if hasattr(operator, "inv") else 1/operator,
-                             system
-                             )
+        return LocalOperator(
+            site, operator.inv() if hasattr(operator, "inv") else 1 / operator, system
+        )
 
     def partial_trace(self, sites: list):
         system = self.system
@@ -258,11 +284,12 @@ class LocalOperator(Operator):
         subsystem = system.subsystem(sites)
         local_sites = subsystem.sites
         site = self.site
-        prefactors = [d for s, d in dimensions.items()
-                      if s != site and s not in local_sites]
+        prefactors = [
+            d for s, d in dimensions.items() if s != site and s not in local_sites
+        ]
 
         if len(prefactors) > 0:
-            prefactor = reduce(lambda x, y: x*y, prefactors)
+            prefactor = reduce(lambda x, y: x * y, prefactors)
         else:
             prefactor = 1
 
@@ -270,7 +297,7 @@ class LocalOperator(Operator):
         if hasattr(local_op, "tr") and self.site not in local_sites:
             local_op = local_op.tr()
 
-        return LocalOperator(site, local_op*prefactor, subsystem)
+        return LocalOperator(site, local_op * prefactor, subsystem)
 
     def to_qutip(self):
         """Convert to a Qutip object"""
@@ -278,13 +305,14 @@ class LocalOperator(Operator):
         dimensions = self.system.dimensions
         operator = self.operator
         if isinstance(operator, (int, float, complex)):
-            operator = qutip.qeye(dimensions[site])*operator
+            operator = qutip.qeye(dimensions[site]) * operator
         elif isinstance(operator, Operator):
             operator = operator.to_qutip()
 
-        return qutip.tensor([operator if s == site else
-                             qutip.qeye(d)
-                             for s, d in dimensions.items()])
+        return qutip.tensor(
+            [operator if s == site else qutip.qeye(
+                d) for s, d in dimensions.items()]
+        )
 
     def tr(self):
         result = self.partial_trace([])
@@ -307,8 +335,11 @@ class ProductOperator(Operator):
                 remove_numbers = True
 
         if remove_numbers:
-            sites_operators = {s: op for s, op in sites_operators.items(
-            ) if not isinstance(op, (int, float, complex))}
+            sites_operators = {
+                s: op
+                for s, op in sites_operators.items()
+                if not isinstance(op, (int, float, complex))
+            }
 
         self.sites_op = sites_operators
         if any(op.data.count_nonzero() == 0 for op in sites_operators.values()):
@@ -359,9 +390,7 @@ class ProductOperator(Operator):
         if isinstance(operand, (int, float, complex)):
             new_prefactor = self.prefactor * operand
             if new_prefactor == 0.0:
-                return ProductOperator(
-                    {}, prefactor=new_prefactor, system=self.system
-                )
+                return ProductOperator({}, prefactor=new_prefactor, system=self.system)
             return ProductOperator(
                 self.sites_op, prefactor=new_prefactor, system=self.system
             )
@@ -375,10 +404,10 @@ class ProductOperator(Operator):
                 return self.prefactor * operand
             if num_ops == 1:
                 if site in sites_op:
-                    return LocalOperator(site,
-                                         self.prefactor *
-                                         sites_op[site] * operand.operator,
-                                         system)
+                    return LocalOperator(
+                        site, self.prefactor *
+                        sites_op[site] * operand.operator, system
+                    )
                 sites_op = sites_op.copy()
                 sites_op[site] = operand.operator
             else:
@@ -447,8 +476,7 @@ class ProductOperator(Operator):
         subsystem = self.system.subsystem(sites_in)
         sites_op = self.sites_op
         prefactors = [
-            sites_op[s].tr() if s in sites_op else dimensions[s]
-            for s in sites_out
+            sites_op[s].tr() if s in sites_op else dimensions[s] for s in sites_out
         ]
         sites_op = {s: o for s, o in sites_op.items() if s in sites_in}
         prefactor = self.prefactor
@@ -461,10 +489,12 @@ class ProductOperator(Operator):
     def simplify(self):
         nops = len(self.sites_op)
         if nops == 0:
-            return LocalOperator(next(iter(self.system.sites)), self.prefactor, self.system)
+            return LocalOperator(
+                next(iter(self.system.sites)), self.prefactor, self.system
+            )
         if nops == 1:
             site, op_local = next(iter(self.sites_op.items()))
-            return LocalOperator(site, self.prefactor*op_local, self.system)
+            return LocalOperator(site, self.prefactor * op_local, self.system)
         return self
 
     def to_qutip(self):
@@ -487,6 +517,7 @@ class SumOperator(Operator):
     """
     Represents a linear combination of operators
     """
+
     terms: List[Operator]
     system: Optional[SystemDescriptor]
 
@@ -592,7 +623,7 @@ class SumOperator(Operator):
         return SumOperator([t.dag() for t in self.terms])
 
     def partial_trace(self, sites: list):
-        return sum(t.partial_trace(sites) for t in self.terms)
+        return sum(term.prefactor*term.partial_trace(sites) for term in self.terms)
 
     def simplify(self):
         system = self.system
@@ -618,15 +649,14 @@ class SumOperator(Operator):
             else:
                 general_terms.append(term)
 
-        loc_ops_lst = [LocalOperator(site, sum(l_ops), system)
-                       for site, l_ops in site_terms.items()]
+        loc_ops_lst = [
+            LocalOperator(site, sum(l_ops), system)
+            for site, l_ops in site_terms.items()
+        ]
 
         qutip_term = sum(qutip_terms)
         qutip_terms = qutip_term if qutip_terms else []
-        terms = (general_terms +
-                 loc_ops_lst +
-                 qutip_terms
-                 )
+        terms = general_terms + loc_ops_lst + qutip_terms
         return SumOperator(terms, system)
 
     def to_qutip(self):
@@ -649,15 +679,16 @@ class OneBodyOperator(SumOperator):
         """
         if check_and_convert is True,
         """
-        check_and_convert = True
         if check_and_convert:
             terms_by_site = {}
+
             for term in terms:
                 if system is None:
                     system = term.system
                 else:
                     system = system.union(term.system)
 
+            for term in terms:
                 if isinstance(term, LocalOperator):
                     assert isinstance(
                         term.operator, (int, float, complex, Qobj))
@@ -667,9 +698,8 @@ class OneBodyOperator(SumOperator):
                 if isinstance(term, ProductOperator):
                     n_factors = len(term.sites_op)
                     if n_factors > 1:
-                        print("term", term)
                         raise ValueError("All the terms must be local", term)
-                    if n_factors == 0:
+                    elif n_factors == 0:
                         if term.system:
                             site = next(iter(term.system.sites))
                             terms_by_site.setdefault(
@@ -677,25 +707,31 @@ class OneBodyOperator(SumOperator):
                             continue
 
                         raise ValueError(
-                            "A trivial product operator should have a system")
-
-                    site, op_l = next(iter(term.sites_op.items()))
-                    assert isinstance(op_l, (int, float, complex, Qobj))
-                    terms_by_site.setdefault(
-                        site, []).append(term.prefactor*op_l)
-                    continue
+                            "A trivial product operator should have a system"
+                        )
+                    else:
+                        site, op_l = next(iter(term.sites_op.items()))
+                        assert isinstance(op_l, (Number, Qobj))
+                        terms_by_site.setdefault(site, []).append(
+                            term.prefactor * op_l)
+                        continue
                 if isinstance(term, SumOperator):
-                    for t_i in OneBodyOperator(term.terms,
-                                               term.system,
-                                               check_and_convert=True).terms:
-                        assert isinstance(t_i, (int, float, complex, Qobj))
+                    for t_i in OneBodyOperator(
+                        term.terms, term.system, check_and_convert=True
+                    ).terms:
+                        assert isinstance(t_i, (Number, LocalOperator))
                         terms_by_site.setdefault(
                             t_i.site, []).append(t_i.operator)
                     continue
-                raise ValueError("Invalid term type")
+                raise ValueError("Invalid term type", type(term))
 
-            super().__init__([LocalOperator(s, sum(ops), system)
-                              for s, ops in terms_by_site.items()], system)
+            super().__init__(
+                [
+                    LocalOperator(s, sum(ops), system)
+                    for s, ops in terms_by_site.items()
+                ],
+                system,
+            )
         else:
             super().__init__(terms, system)
 
@@ -704,12 +740,12 @@ class OneBodyOperator(SumOperator):
         if isinstance(operand, OneBodyOperator):
             my_terms = [term for term in self.terms if term]
             other_terms = [term for term in operand.terms if term]
-            return OneBodyOperator(my_terms+other_terms, system)
+            return OneBodyOperator(my_terms + other_terms, system)
         if isinstance(operand, (int, float, complex)):
             if operand:
-                return OneBodyOperator(self.terms +
-                                       [ProductOperator({}, operand, system)],
-                                       system)
+                return OneBodyOperator(
+                    self.terms + [ProductOperator({}, operand, system)], system
+                )
             return self
         if isinstance(operand, LocalOperator):
             return OneBodyOperator(self.terms + [operand], system)
@@ -720,15 +756,20 @@ class OneBodyOperator(SumOperator):
         if isinstance(operand, OneBodyOperator):
             my_terms = [term for term in self.terms if term]
             other_terms = [term for term in operand.terms if term]
-            return SumOperator([
-                my_term*other_term for my_term in my_terms
-                for other_term in other_terms
-            ], system)
+            return SumOperator(
+                [
+                    my_term * other_term
+                    for my_term in my_terms
+                    for other_term in other_terms
+                ],
+                system,
+            )
         if isinstance(operand, (int, float, complex)):
             if operand:
-                return OneBodyOperator([
-                    term * operand for term in self.terms if term], system)
-            return ProductOperator({}, 0., system)
+                return OneBodyOperator(
+                    [term * operand for term in self.terms if term], system
+                )
+            return ProductOperator({}, 0.0, system)
         return super().__mul__(operand)
 
     def __rmul__(self, operand):
@@ -736,21 +777,29 @@ class OneBodyOperator(SumOperator):
         if isinstance(operand, OneBodyOperator):
             my_terms = self.terms
             other_terms = operand.terms
-            return SumOperator([
-                other_term * my_term for my_term in my_terms
-                for other_term in other_terms
-            ], system)
+            return SumOperator(
+                [
+                    other_term * my_term
+                    for my_term in my_terms
+                    for other_term in other_terms
+                ],
+                system,
+            )
         if isinstance(operand, (int, float, complex)):
             if operand:
-                return OneBodyOperator([
-                    operand * term for term in self.terms if term
-                ], system)
-            return ProductOperator({}, 0., system)
+                return OneBodyOperator(
+                    [operand * term for term in self.terms if term], system
+                )
+            return ProductOperator({}, 0.0, system)
         return super().__mul__(operand)
 
+    def __neg__(self):
+        return OneBodyOperator([-term for term in self.terms], self.system)
+
     def dag(self):
-        return OneBodyOperator([term.dag() for term in self.terms],
-                               self.system, check_and_convert=False)
+        return OneBodyOperator(
+            [term.dag() for term in self.terms], self.system, check_and_convert=False
+        )
 
     def expm(self):
         sites_op = {}

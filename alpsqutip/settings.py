@@ -8,6 +8,7 @@ Created on Tue Sep 12 19:07:05 2023
 
 # import os
 import os.path as osp
+
 # import sys
 # from pathlib import Path
 
@@ -18,6 +19,7 @@ def get_srcdir():
     """Get the root directory of the source code"""
     filename = osp.normcase(osp.dirname(osp.abspath(__file__)))
     return osp.realpath(filename)
+
 
 ROOT_DIR = get_srcdir()
 FIGURES_DIR = f"{ROOT_DIR}/doc/figs"

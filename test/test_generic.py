@@ -3,14 +3,11 @@ Basic unit test.
 """
 
 import matplotlib.pyplot as plt
-
-
 from alpsqutip.alpsmodels import list_operators_in_alps_xml, model_from_alps_xml
 from alpsqutip.geometry import graph_from_alps_xml, list_graph_in_alps_xml
 from alpsqutip.model import SystemDescriptor
 from alpsqutip.settings import FIGURES_DIR, LATTICE_LIB_FILE, MODEL_LIB_FILE
 from alpsqutip.utils import eval_expr
-
 
 # TODO: Split me in more atomic units.
 
@@ -37,8 +34,7 @@ def test_load():
     for name in list_graph_in_alps_xml(LATTICE_LIB_FILE):
         try:
             g = graph_from_alps_xml(
-                LATTICE_LIB_FILE, name, parms={
-                    "L": 3, "W": 3, "a": 1, "b": 1, "c": 1}
+                LATTICE_LIB_FILE, name, parms={"L": 3, "W": 3, "a": 1, "b": 1, "c": 1}
             )
         except Exception as e:
             assert False, f"geometry {name} could not be loaded due to {e}"

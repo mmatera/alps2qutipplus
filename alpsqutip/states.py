@@ -1,12 +1,33 @@
 """
-Density operator classes
+Density operator classes.
 """
 from functools import reduce
-from typing import Optional
-import numpy as np
+from numbers import Number
+from typing import Dict, Iterable, Optional, Union
 
-from alpsqutip.model import SystemDescriptor, Operator
-from alpsqutip.operators import LocalOperator, OneBodyOperator, ProductOperator, SumOperator
+import numpy as np
+from qutip import Qobj, tensor as qutip_tensor, qeye as qutip_qeye
+
+from alpsqutip.model import Operator, SystemDescriptor
+from alpsqutip.operator_functions import eigenvalues
+from alpsqutip.operators import (
+    LocalOperator,
+    OneBodyOperator,
+    ProductOperator,
+    QutipOperator,
+    SumOperator,
+)
+
+
+def safe_exp_and_normalize(operator):
+    """Compute `expm(operator)/Z` and `log(Z)`.
+    `Z=expm(operator).tr()` in a safe way.
+    """
+    k_0 = max(abs(eigenvalues(operator, sparse=True, sort="high", eigvals=3)))
+    op_exp = (operator - k_0).expm()
+    op_exp_tr = op_exp.tr()
+    op_exp = op_exp * (1.0 / op_exp_tr)
+    return op_exp, np.log(op_exp_tr) + k_0
 
 
 class DensityOperatorMixin:
@@ -16,13 +37,63 @@ class DensityOperatorMixin:
     `expect`.
     """
 
-    def expect(self, obs):
+    isherm: bool = True
+
+    def __add__(self, operand):
+        if isinstance(operand, DensityOperatorMixin):
+            return MixtureDensityOperator([self, operand])
+        return super().__add__(operand)
+
+    def expect(self, obs: Union[Operator, Iterable]) -> Union[np.ndarray, dict, Number]:
         """Compute the expectation value of an observable"""
+        if isinstance(obs, dict):
+            return {name: self.expect(operator) for name, operator in obs.items()}
+
+        if isinstance(obs, (tuple, list)):
+            return np.array([self.expect(operator) for operator in obs])
+
         return (self * obs).tr()
 
 
+class QutipDensityOperator(QutipOperator, DensityOperatorMixin):
+    """
+    Qutip representation of a density operator
+    """
+
+    def __init__(
+        self,
+        qoperator: Qobj,
+        system: Optional[SystemDescriptor] = None,
+        names=None,
+        prefactor=1,
+    ):
+        prefactor = prefactor * qoperator.tr()
+        assert prefactor >= 0 and qoperator.isherm
+        qoperator = qoperator / prefactor
+
+        super().__init__(qoperator, system, names, prefactor)
+
+    def __mul__(self, operand) -> Operator:
+        if isinstance(operand, (int, float)):
+            assert operand >= 0
+            return QutipDensityOperator(
+                self.operator, self.system, self.site_names, self.prefactor * operand
+            )
+
+        return super().__mul__(operand)
+
+    def __rmul__(self, operand) -> Operator:
+        if isinstance(operand, (int, float)):
+            assert operand >= 0
+            return QutipDensityOperator(
+                self.operator, self.system, self.site_names, self.prefactor * operand
+            )
+
+        return super().__mul__(operand)
+
+
 class ProductDensityOperator(ProductOperator, DensityOperatorMixin):
-    """An uncorrelated density operator"""
+    """An uncorrelated density operator."""
 
     def __init__(
         self,
@@ -35,39 +106,55 @@ class ProductDensityOperator(ProductOperator, DensityOperatorMixin):
         sites = tuple(system.sites.keys() if system else local_states.keys())
         dimensions = system.dimensions
         local_zs = {
-            site: (local_states[site].tr()
-                   if site in local_states
-                   else dimensions[site])
+            site: (
+                local_states[site].tr(
+                ) if site in local_states else dimensions[site]
+            )
             for site in sites
         }
 
         if normalize:
             assert (z > 0 for z in local_zs.values())
-            local_states = {site:
-                            sigma / local_zs[site] for site, sigma in local_states.items()
-                            }
-            for local_z in local_zs.values():
-                weight /= local_z
+            local_states = {
+                site: sigma / local_zs[site] for site, sigma in local_states.items()
+            }
 
         super().__init__(local_states, prefactor=weight, system=system)
         self.local_fs = {site: -np.log(z) for site, z in local_zs.items()}
 
-    def expect(self, obs: Operator):
-        sites_obs = obs.sites_op
-        local_states = self.sites_op
-        factors = [
-            (local_states[site] * op).tr() for site, op in sites_obs.items()
-        ]
-        result = 1
-        for local_f in factors:
-            result *= local_f
-        return result
+    def expect(self, obs: Union[Operator, Iterable]) -> Union[np.ndarray, dict, Number]:
+        if isinstance(obs, LocalOperator):
+            operator = obs.operator
+            site = obs.site
+            local_states = self.sites_op
+            if site in local_states:
+                return (local_states[site] * operator).tr()
+            return operator.tr() / reduce(lambda x, y: x * y, operator.dims[0])
+        if isinstance(obs, SumOperator):
+            return sum(self.expect(term) for term in obs.terms)
+
+        if isinstance(obs, ProductOperator):
+            sites_obs = obs.sites_op
+            local_states = self.sites_op
+            result = obs.prefactor
+
+            for site, obs_op in sites_obs.items():
+                if result == 0:
+                    break
+                if site in local_states:
+                    result *= (local_states[site] * obs_op).tr()
+                else:
+                    result *= obs_op.tr() / reduce((lambda x, y: x * y),
+                                                   obs_op.dims[0])
+            return result
+        return super().expect(obs)
 
     def partial_trace(self, sites: list):
         sites_op = self.sites_op
         sites_in = [site for site in sites if site in sites_op]
         local_states = {site: sites_op[site] for site in sites_in}
         subsystem = self.system.subsystem(sites_in)
+        print("partial trace of a product state", self.prefactor, local_states)
         return ProductDensityOperator(
             local_states, self.prefactor, subsystem, normalize=False
         )
@@ -83,9 +170,8 @@ class ProductDensityOperator(ProductOperator, DensityOperatorMixin):
                 )
             if n_factors == 1:
                 site, sigma = next(sites_op.items())
-                local_dim = (
-                    1 / system.dimensions.get(site, 1) if system else 1.0
-                )
+                local_dim = 1 / \
+                    system.dimensions.get(site, 1) if system else 1.0
                 prefactor = self.prefactor
                 new_prefactor = prefactor + rho / local_dim
                 return ProductDensityOperator(
@@ -95,7 +181,7 @@ class ProductDensityOperator(ProductOperator, DensityOperatorMixin):
                     new_prefactor,
                     system,
                 )
-            return SeparableDensityOperator(
+            return MixtureDensityOperator(
                 [ProductDensityOperator({}, rho, self.system, False)]
             )
 
@@ -125,9 +211,9 @@ class ProductDensityOperator(ProductOperator, DensityOperatorMixin):
                         self.system,
                         False,
                     )
-            return SeparableDensityOperator([self, rho])
-        if isinstance(rho, SeparableDensityOperator):
-            return SeparableDensityOperator(rho.terms + [self])
+            return MixtureDensityOperator([self, rho])
+        if isinstance(rho, MixtureDensityOperator):
+            return MixtureDensityOperator(rho.terms + [self])
         return super().__add__(rho)
 
     def __mul__(self, a):
@@ -141,122 +227,297 @@ class ProductDensityOperator(ProductOperator, DensityOperatorMixin):
                 return ProductDensityOperator({}, a, self.system, False)
         return super().__mul__(a)
 
+    def __rmul__(self, a):
+        if isinstance(a, float):
+            if a > 0:
+                return ProductDensityOperator(
+                    self.sites_op, self.prefactor * a, self.system, False
+                )
 
-class SeparableDensityOperator(SumOperator, DensityOperatorMixin):
-    """
-    A mixture of product operators
-    """
+            if a == 0.0:
+                return ProductDensityOperator({}, a, self.system, False)
+        return super().__rmul__(a)
 
-    def __init__(self, terms: list):
-        assert (isinstance(t, ProductDensityOperator) for t in terms)
-        super().__init__(terms)
-
-    def expect(self, obs: Operator):
-        normalization = sum(t.prefactor for t in self.terms)
-        return (
-            sum(t.expect(obs) * t.prefactor for t in self.terms)
-            / normalization
+    def to_qutip(self):
+        prefactor = self.prefactor
+        if prefactor == 0 or len(self.system.dimensions) == 0:
+            return prefactor
+        ops = self.sites_op
+        return prefactor * qutip_tensor(
+            [
+                ops[site] if site in ops else qutip_qeye(dim)/dim
+                for site, dim in self.system.dimensions.items()
+            ]
         )
+
+
+class MixtureDensityOperator(SumOperator, DensityOperatorMixin):
+    """
+    A mixture of density operators
+    """
+
+    def __init__(self, terms: list, system: SystemDescriptor = None):
+        assert (isinstance(t, ProductDensityOperator) for t in terms)
+        super().__init__(terms, system)
+
+    def expect(self, obs: Union[Operator, Iterable]) -> Union[np.ndarray, dict, Number]:
+        strip = False
+        if isinstance(obs, Operator):
+            strip = True
+            obs = [obs]
+
+        av_terms = tuple(term.expect(obs) for term in self.terms)
+        if isinstance(obs, dict):
+            return {op_name: sum(term[op_name] for term in av_terms) for op_name in obs}
+        if strip:
+            return sum(term for term in av_terms)[0]
+        return sum(term for term in av_terms)
 
     def partial_trace(self, sites: list):
-        return SeparableDensityOperator(
-            [t.partial_trace(sites) for t in self.terms]
-        )
+        return MixtureDensityOperator([t.partial_trace(sites) for t in self.terms])
 
     def __add__(self, rho: Operator):
-        if isinstance(rho, SeparableDensityOperator):
-            return SeparableDensityOperator(self.terms + rho.terms)
-        if isinstance(rho, ProductDensityOperator):
-            return SeparableDensityOperator(self.terms + [rho])
-        if isinstance(rho, float):
-            return SeparableDensityOperator(
-                self.terms + [
-                    ProductDensityOperator(
-                        {}, rho, self.terms[0].system, False
-                    )
-                ]
-            )
-        return super().__add__(rho)
+        terms = self.terms
+        system = self.system
+
+        if isinstance(rho, MixtureDensityOperator):
+            terms = terms + rho.terms
+        elif isinstance(rho, DensityOperatorMixin):
+            terms = terms + [rho]
+        elif isinstance(rho, (int, float)):
+            terms = terms + [ProductDensityOperator({}, rho, system, False)]
+        else:
+            return super().__add__(rho)
+        return MixtureDensityOperator(terms, system)
 
     def __mul__(self, a):
         if isinstance(a, float):
-            return SeparableDensityOperator(
+            return MixtureDensityOperator(
                 [
                     ProductDensityOperator(
-                        t.sites_op, t.prefactor * a, t.system, False
-                    )
+                        t.sites_op, t.prefactor * a, t.system, False)
                     for t in self.terms
                 ]
             )
         return super().__mul__(a)
 
+    def to_qutip(self):
+        """Produce a qutip compatible object"""
+        if len(self.terms) == 0:
+            return ProductOperator({}, 0, self.system).to_qutip()
+        return sum(term.to_qutip() for term in self.terms)
+
+    def tr(self) -> float:
+        return sum(term.tr() for term in self.terms)
+
 
 class GibbsDensityOperator(Operator, DensityOperatorMixin):
     """
-    stores an operator of the form rho=exp(-K)/Tr(exp(-K))
+    Stores an operator of the form rho= prefactor * exp(-K) / Tr(exp(-K)).
+
     """
 
-    def __init__(self, K: Operator, system: SystemDescriptor = None):
-        self.K = K
-        self.system = system or K.system
+    free_energy: float
+    normalized: bool
+    k: Operator
+
+    def __init__(
+        self,
+        k: Operator,
+        system: SystemDescriptor = None,
+        prefactor=1.0,
+        normalized=False,
+    ):
+        assert prefactor > 0
+        self.k = k
+        self.f_global = 0.0
+        self.free_energy = 0.0
+        self.prefactor = prefactor
+        self.normalized = normalized
+        self.system = system or k.system
+
+    def __mul__(self, operand):
+        if isinstance(operand, (int, float, complex)):
+            return GibbsDensityOperator(
+                self.k,
+                self.system,
+                self.prefactor * operand,
+                normalized=self.normalized,
+            )
+        return self.to_qutip_operator() * operand
 
     def __neg__(self):
         return -self.to_qutip_operator()
+
+    def __rmul__(self, operand):
+        if isinstance(operand, (int, float, complex)):
+            return GibbsDensityOperator(
+                self.k,
+                self.system,
+                self.prefactor * operand,
+                normalized=self.normalized,
+            )
+        return operand * self.to_qutip_operator()
+
+    def __truediv__(self, operand):
+        if isinstance(operand, (int, float, complex)):
+            return GibbsDensityOperator(
+                self.k,
+                self.system,
+                self.prefactor / operand,
+                normalized=self.normalized,
+            )
+        if isinstance(operand, Operator):
+            return self * operand.inv()
+        raise ValueError("Division of an operator by ",
+                         type(operand), " not defined.")
+
+    def expect(self, obs: Union[Operator, Iterable]) -> Union[np.ndarray, dict, Number]:
+        return self.to_qutip_operator().expect(obs)
+
+    def normalize(self) -> Operator:
+        """Normalize the operator in a way that exp(-K).tr()==1"""
+        if not self.normalized:
+            rho, log_prefactor = safe_exp_and_normalize(
+                -self.k
+            )  # pylint: disable=unused-variable
+            self.k = self.k + log_prefactor
+            self.free_energy = log_prefactor
+            self.normalized = True
 
     def partial_trace(self, sites):
         return self.to_qutip_operator().partial_trace(sites)
 
     def to_qutip(self):
-        # TODO: add offset to the lowest eigenvalue
-        rho_qutip = (-self.K).to_qutip().expm()
-        return rho_qutip / rho_qutip.tr()
+        if not self.normalized:
+            rho, log_prefactor = safe_exp_and_normalize(-self.k)
+            self.k = self.k + log_prefactor
+            self.free_energy = log_prefactor
+            self.normalized = True
+            return self.prefactor * rho.to_qutip()
+        result = (-self.k).to_qutip().expm() * self.prefactor
+        return result
+
+    def to_qutip_operator(self):
+        rho_qutip = self.to_qutip()
+        return QutipDensityOperator(rho_qutip, self.system, prefactor=1)
 
 
 class GibbsProductDensityOperator(Operator, DensityOperatorMixin):
     """
-    stores an operator of the form rho=\\otimes_i exp(-K_i)/Tr(exp(-K_i))
+    Stores an operator of the form
+    rho = prefactor * \\otimes_i exp(-K_i)/Tr(exp(-K_i)).
+
     """
 
-    def __init__(self, K: Operator, system: SystemDescriptor = None, normalize=True):
-        if isinstance(K, LocalOperator):
-            if normalize:
-                self.k_by_site = {K.site: K.operator+np.log(K.expm().tr())}
-            else:
-                self.k_by_site = {K.site: K.operator}
-        elif isinstance(K, OneBodyOperator):
-            k_by_site = {k_local.site: k_local.operator for k_local in K.terms}
-            if normalize:
-                k_by_site = {
-                    site: local_k + np.log(K.expm().tr()) for site, local_k in k_by_site.values()}
-            self.k_by_syte = k_by_site
+    k_by_site: list
+    prefactor: float
+    free_energies: Dict[str, float]
+
+    def __init__(
+        self,
+        k: Union[Operator, dict],
+        prefactor: float = 1,
+        system: SystemDescriptor = None,
+        normalized: bool = False,
+    ):
+        assert prefactor > 0.0
+        self.prefactor = prefactor
+
+        if isinstance(k, LocalOperator):
+            self.system = system or k.system
+            k_by_site = {k.site: k.operator}
+        elif isinstance(k, OneBodyOperator):
+            self.system = system or k.system
+            k_by_site = {k_local.site: k_local.operator for k_local in k.terms}
+        elif isinstance(k, dict):
+            self.system = system
+            k_by_site = k
         else:
-            raise ValueError
+            raise ValueError(
+                "ProductGibbsOperator cannot be initialized from a ", type(k)
+            )
 
-        self.system = system or K.system
+        if normalized:
+            if system:
+                self.free_energies = {
+                    site: 0 if site in k_by_site else np.log(dimension)
+                    for site, dimension in system.dimensions.items()
+                }
+            else:
+                self.free_energies = {site: 0 for site in k_by_site}
+        else:
+            f_locals = {
+                site: np.log((-l_op).expm().tr()) for site, l_op in k_by_site.items()
+            }
 
-    def expect(self, operator):
-        # TODO: write a better implementation
-        return self.to_product_state().expect(operator)
+            if system:
+                self.free_energies = {
+                    site: f_locals.get(site, np.log(dimension))
+                    for site, dimension in system.dimensions.items()
+                }
+            else:
+                self.free_energies = f_locals
 
-    def partial_trace(self, sites):
-        sites = [site for site in sites if site in self.system.dimensions]
-        subsystem = self.system.subsystem(sites)
-        return GibbsProductDensityOperator({self.k_by_site[site] for site in sites},
-                                           subsystem, False)
+            k_by_site = {
+                site: local_k + f_locals[site] for site, local_k in k_by_site.items()
+            }
 
-    def to_product_state(self):
-        """Convert the operator in a productstate"""
+        self.k_by_site = k_by_site
 
-        dimensions = self.system.dimensions
-        global_z = reduce(
-            lambda x, y: x*y, [dim for site, dim in dimensions.values() if site not in self.k_by_site])
-
-        return ProductDensityOperator({site: (-local_k).expm() for site, local_k in self.k_by_site.values()},
-                                      1./global_z, system=self.system, normalize=False)
+    def __mul__(self, operand):
+        if isinstance(operand, (int, float)):
+            if operand > 0:
+                return GibbsProductDensityOperator(
+                    self.k_by_site, self.prefactor * operand, self.system, True
+                )
+        return self.to_product_state() * operand
 
     def __neg__(self):
         return -self.to_product_state()
 
+    def __rmul__(self, operand):
+        if isinstance(operand, (int, float)):
+            if operand > 0:
+                return GibbsProductDensityOperator(
+                    self.k_by_site, self.prefactor * operand, self.system, True
+                )
+        return operand * self.to_product_state()
+
+    def expect(self, obs: Union[Operator, Iterable]) -> Union[np.ndarray, dict, Number]:
+        # TODO: write a better implementation
+        if isinstance(obs, Operator):
+            return (self.to_product_state()).expect(obs) * self.prefactor
+        return super().expect(obs)
+
+    def partial_trace(self, sites):
+        sites = [site for site in sites if site in self.system.dimensions]
+        subsystem = self.system.subsystem(sites)
+        k_by_site = self.k_by_site
+        return GibbsProductDensityOperator(
+            OneBodyOperator(
+                [
+                    LocalOperator(site, k_by_site[site], subsystem)
+                    for site in sites
+                    if site in k_by_site
+                ],
+                subsystem,
+            ),
+            self.prefactor,
+            subsystem,
+            True,
+        )
+
+    def to_product_state(self):
+        """Convert the operator in a productstate"""
+
+        return ProductDensityOperator(
+            {site: (-local_k).expm()
+             for site, local_k in self.k_by_site.items()},
+            self.prefactor,
+            system=self.system,
+            normalize=False,
+        )
+
     def to_qutip(self):
-        # TODO: add offset to the lowest eigenvalue
         return self.to_product_state().to_qutip()
