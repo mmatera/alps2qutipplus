@@ -27,6 +27,11 @@ from .helper import (
 # from alpsqutip.settings import VERBOSITY_LEVEL
 
 
+def compare_spectrum(spectrum1, spectrum2):
+    assert max(abs(np.array(sorted(spectrum1)) -
+               np.array(sorted(spectrum2)))) < 1.e-12
+
+
 def test_eigenvalues():
     """Tests eigenvalues of different operator objects"""
 
@@ -38,22 +43,23 @@ def test_eigenvalues():
     spectrum = sorted(eigenvalues(test_cases_states["fully mixed"]))
     assert all(abs(s-.5**CHAIN_SIZE) < 1e-6 for s in spectrum)
 
-    #  e^(sz)/Tr e^(sz)
-    spectrum = sorted(eigenvalues(test_cases_states["gibbs_sz"]))
-    expected_local_spectrum = np.array(np.exp(-1), np.exp(1),)
-    expected_spectrum = np.array([s1*s2*s2*s4*s5*s6
-                                 for s1 in expected_local_spectrum
-                                 for s2 in expected_local_spectrum
-                                 for s3 in expected_local_spectrum
-                                 for s4 in expected_local_spectrum
-                                 for s5 in expected_local_spectrum
-                                 for s6 in expected_local_spectrum
-                                  ])
-    assert np.linalg.norm(expected_spectrum-spectrum) < 1.e-6
-
     e0 = min(eigenvalues(hamiltonian, sparse=True, sort="low", eigvals=10))
     print("e0=", e0)
-    assert e0 == 0
+    assert abs(e0 + 3.00199535) < 1.e-6
+
+    #  e^(sz)/Tr e^(sz)
+    spectrum = sorted(eigenvalues(test_cases_states["gibbs_sz"]))
+    expected_local_spectrum = np.array([np.exp(-.5), np.exp(.5)])
+    expected_local_spectrum = (expected_local_spectrum /
+                               sum(expected_local_spectrum))
+
+    expected_spectrum = expected_local_spectrum.copy()
+    for i in range(5):
+        expected_spectrum = np.append(
+            expected_spectrum * expected_local_spectrum[0],
+            expected_spectrum * expected_local_spectrum[1])
+
+    compare_spectrum(expected_spectrum, spectrum)
 
 
 # test_load()
