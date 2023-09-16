@@ -11,6 +11,13 @@ from alpsqutip.model import Operator, SystemDescriptor, build_spin_chain
 from alpsqutip.operators import OneBodyOperator, ProductOperator, SumOperator
 from alpsqutip.settings import VERBOSITY_LEVEL
 
+from alpsqutip.states import (
+    GibbsDensityOperator,
+    GibbsProductDensityOperator,
+    ProductDensityOperator,
+)
+
+
 CHAIN_SIZE = 6
 
 system: SystemDescriptor = build_spin_chain(CHAIN_SIZE)
@@ -61,8 +68,34 @@ observable_cases = {
 }
 
 
+test_cases_states = {}
+
+test_cases_states["fully mixed"] = ProductDensityOperator(
+    {}, 1.0, system=system)
+
+test_cases_states["gibbs_sz"] = GibbsProductDensityOperator(
+    sz_total, system=system)
+
+test_cases_states["gibbs_sz_as_product"] = GibbsProductDensityOperator(
+    sz_total, system=system
+).to_product_state()
+test_cases_states["gibbs_sz_bar"] = GibbsProductDensityOperator(
+    -sz_total, system=system
+)
+test_cases_states["gibbs_H"] = GibbsDensityOperator(hamiltonian, system=system)
+test_cases_states["gibbs_H"] = (
+    test_cases_states["gibbs_H"] / test_cases_states["gibbs_H"].tr()
+)
+test_cases_states["mixture"] = (
+    0.5 * test_cases_states["gibbs_H"]
+    + 0.25 * test_cases_states["gibbs_sz"]
+    + 0.25 * test_cases_states["gibbs_sz_bar"]
+)
+
+
 def alert(verbosity, *args):
-    if verbosity > VERBOSITY_LEVEL:
+    """Print a message depending on the verbosity level"""
+    if verbosity < VERBOSITY_LEVEL:
         print(*args)
 
 
