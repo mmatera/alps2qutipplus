@@ -2,14 +2,14 @@
 Basic unit test.
 """
 
-import matplotlib.pyplot as plt
-from alpsqutip.alpsmodels import list_operators_in_alps_xml, model_from_alps_xml
-from alpsqutip.geometry import graph_from_alps_xml, list_graph_in_alps_xml
-from alpsqutip.model import SystemDescriptor
-from alpsqutip.settings import FIGURES_DIR, LATTICE_LIB_FILE, MODEL_LIB_FILE
-from alpsqutip.utils import eval_expr
 
-# TODO: Split me in more atomic units.
+from .helper import alert
+from alpsqutip.utils import eval_expr
+from alpsqutip.settings import FIGURES_DIR, LATTICE_LIB_FILE, MODEL_LIB_FILE
+from alpsqutip.model import SystemDescriptor
+from alpsqutip.geometry import graph_from_alps_xml, list_graph_in_alps_xml
+from alpsqutip.alpsmodels import list_operators_in_alps_xml, model_from_alps_xml
+import matplotlib.pyplot as plt
 
 
 def test_eval_expr():
@@ -34,12 +34,13 @@ def test_load():
     for name in list_graph_in_alps_xml(LATTICE_LIB_FILE):
         try:
             g = graph_from_alps_xml(
-                LATTICE_LIB_FILE, name, parms={"L": 3, "W": 3, "a": 1, "b": 1, "c": 1}
+                LATTICE_LIB_FILE, name, parms={
+                    "L": 3, "W": 3, "a": 1, "b": 1, "c": 1}
             )
         except Exception as e:
             assert False, f"geometry {name} could not be loaded due to {e}"
 
-        print(g)
+        alert(1, g)
         fig = plt.figure()
         if g.lattice and g.lattice["dimension"] > 2:
             ax = fig.add_subplot(projection="3d")
@@ -49,19 +50,19 @@ def test_load():
         ax.set_title(name)
         g.draw(ax)
         plt.savefig(FIGURES_DIR + f"/{name}.png")
-    print("models:")
+    alert(1, "models:")
 
     for modelname in list_operators_in_alps_xml(MODEL_LIB_FILE):
-        print("\n       ", modelname)
-        print(40 * "*")
+        alert(1, "\n       ", modelname)
+        alert(1, 40 * "*")
         try:
             model = model_from_alps_xml(
                 MODEL_LIB_FILE, modelname, parms={"Nmax": 3, "local_S": 0.5}
             )
-            print(
-                "site types:",
-                {name: lb["name"] for name, lb in model.site_basis.items()},
-            )
+            alert(1,
+                  "site types:",
+                  {name: lb["name"] for name, lb in model.site_basis.items()},
+                  )
         except Exception as e:
             assert False, f"{model} could not be loaded due to {e}"
 
@@ -71,7 +72,7 @@ def test_all():
     graphs = list_graph_in_alps_xml(LATTICE_LIB_FILE)
 
     for model_name in models:
-        print(model_name, "\n", 10 * "*")
+        alert(1, model_name, "\n", 10 * "*")
         for graph_name in graphs:
             g = graph_from_alps_xml(
                 LATTICE_LIB_FILE,
@@ -85,10 +86,10 @@ def test_all():
             )
             try:
                 system = SystemDescriptor(g, model, {})
-                print(system.operators["global_operators"].keys())
+                alert(1, system.operators["global_operators"].keys())
             except Exception as e:
                 # assert False, f"model {model_name} over graph {graph_name} could not be loaded due to {type(e)}:{e}"
-                print("   ", graph_name, "  [failed]", e)
+                alert(1, "   ", graph_name, "  [failed]", e)
                 continue
-            print("   ", graph_name, "  [OK]")
-        print("\n-------------")
+            alert(1, "   ", graph_name, "  [OK]")
+        alert(1, "\n-------------")

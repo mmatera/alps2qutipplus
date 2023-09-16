@@ -3,63 +3,32 @@ Basic unit test for states.
 """
 
 
-import qutip
-from alpsqutip.model import SystemDescriptor, build_spin_chain
-from alpsqutip.operators import OneBodyOperator, ProductOperator, SumOperator
+from alpsqutip.operators import OneBodyOperator
 from alpsqutip.states import (
     GibbsDensityOperator,
     GibbsProductDensityOperator,
     ProductDensityOperator,
 )
 
-from .helper import check_equality, expect_from_qutip
+from .helper import (check_equality,
+                     expect_from_qutip,
+                     sz_total,
+                     system,
+                     hamiltonian,
+                     subsystems,
+                     observable_cases,
+                     )
 
 
 # from alpsqutip.settings import VERBOSITY_LEVEL
 
 
-CHAIN_SIZE = 6
-
-system: SystemDescriptor = build_spin_chain(CHAIN_SIZE)
-sites: tuple = tuple(s for s in system.sites.keys())
-
-sz_total: OneBodyOperator = system.global_operator("Sz")
-hamiltonian: SumOperator = system.global_operator("Hamiltonian")
-
-global_identity: ProductOperator = ProductOperator({}, 1.0, system)
-sx_A = ProductOperator({sites[0]: qutip.sigmax()}, 1.0, system)
-sx_B = ProductOperator({sites[1]: qutip.sigmax()}, 1.0, system)
-sx_AB = 0.7 * sx_A + 0.3 * sx_B
-
-sz_A = ProductOperator({sites[0]: qutip.sigmaz()}, 1.0, system)
-sz_B = ProductOperator({sites[1]: qutip.sigmaz()}, 1.0, system)
-sz_AB = 0.7 * sz_A + 0.3 * sz_B
-
-
-sh_A = 0.25 * sx_A + 0.5 * sz_A
-sh_B = 0.25 * sx_B + 0.5 * sz_B
-sh_AB = 0.7 * sh_A + 0.3 * sh_B
-
-
-subsystem_1 = [sites[0], sites[1]]
-subsystem_2 = [sites[0], sites[2]]
-
-
 def test_states():
     """Tests for state objects"""
     # enumerate the name of each subsystem
-    assert type(sz_total) is OneBodyOperator
+    assert isinstance(sz_total, OneBodyOperator)
 
     test_cases_states = {}
-    observable_cases = {
-        "Identity": ProductOperator({}, 1.0, system),
-        "sz_total": sz_total,
-        "sx_A": sx_A,
-        "sz_B": sz_B,
-        "sh_AB": sh_AB,
-        "hamiltonian": hamiltonian,
-        "observable array": [[sh_AB, sh_A], [sz_A, sx_A]],
-    }
 
     test_cases_states["fully mixed"] = ProductDensityOperator({}, 1.,
                                                               system=system)
@@ -93,7 +62,7 @@ def test_states():
         assert abs(rho.tr() - 1) < 1.0e-10
         assert abs(1 - qt_test_cases[name].tr()) < 1.0e-10
 
-        for subsystem in [subsystem_1, subsystem_2]:
+        for subsystem in subsystems:
             assert check_equality(rho.partial_trace(subsystem).tr(), 1)
 
         # Check Expectation Values
