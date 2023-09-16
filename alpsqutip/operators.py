@@ -1,8 +1,8 @@
 """
 Different representations for operators
 """
-from numbers import Number
 from functools import reduce
+from numbers import Number
 from typing import List, Optional
 
 import numpy as np
@@ -317,8 +317,7 @@ class LocalOperator(Operator):
             operator = operator.to_qutip()
 
         return qutip.tensor(
-            [operator if s == site else qutip.qeye(
-                d) for s, d in dimensions.items()]
+            [operator if s == site else qutip.qeye(d) for s, d in dimensions.items()]
         )
 
     def tr(self):
@@ -388,18 +387,21 @@ class ProductOperator(Operator):
                 if site == operand.site:
                     return LocalOperator(
                         site,
-                        self.sites_op[site] * self.prefactor
-                        + operand.operator,
+                        self.sites_op[site] * self.prefactor + operand.operator,
                         system=self.system,
                     )
-                return OneBodyOperator([operand,
-                                        LocalOperator(
-                                            site,
-                                            self.sites_op[site] *
-                                            self.prefactor,
-                                            system=self.system,
-                                        )
-                                        ], self.system, True)
+                return OneBodyOperator(
+                    [
+                        operand,
+                        LocalOperator(
+                            site,
+                            self.sites_op[site] * self.prefactor,
+                            system=self.system,
+                        ),
+                    ],
+                    self.system,
+                    True,
+                )
             new_terms = [operand, self]
         elif isinstance(operand, SumOperator):
             new_terms = operand.terms + [self]
@@ -429,8 +431,7 @@ class ProductOperator(Operator):
             if num_ops == 1:
                 if site in sites_op:
                     return LocalOperator(
-                        site, self.prefactor *
-                        sites_op[site] * operand.operator, system
+                        site, self.prefactor * sites_op[site] * operand.operator, system
                     )
                 sites_op = sites_op.copy()
                 sites_op[site] = operand.operator
@@ -499,8 +500,9 @@ class ProductOperator(Operator):
             return ProductOperator({}, np.exp(self.prefactor), self.system)
         if n_ops == 1:
             site, operator = next(iter(sites_op.items()))
-            result = LocalOperator(site, (self.prefactor*operator).expm(),
-                                   self.system)
+            result = LocalOperator(
+                site, (self.prefactor * operator).expm(), self.system
+            )
             return result
         result = super().expm()
         return result
@@ -511,12 +513,11 @@ class ProductOperator(Operator):
         prefactor = self.prefactor
 
         n_ops = len(sites_op)
-        sites_op = {site: op_local.inv()
-                    for site, op_local in sites_op.items()}
+        sites_op = {site: op_local.inv() for site, op_local in sites_op.items()}
         if n_ops == 1:
             site, op_local = next(iter(sites_op.items()))
-            return LocalOperator(site, op_local/prefactor, system)
-        return ProductOperator(sites_op, 1/prefactor, system)
+            return LocalOperator(site, op_local / prefactor, system)
+        return ProductOperator(sites_op, 1 / prefactor, system)
 
     def partial_trace(self, sites: list):
         full_system_sites = self.system.sites
@@ -637,17 +638,14 @@ class SumOperator(Operator):
         if isinstance(operand, (int, float, complex)):
             if operand == 0:
                 return operand
-            new_terms = [
-                operand * operand1 for operand1 in self.terms if operand1]
+            new_terms = [operand * operand1 for operand1 in self.terms if operand1]
         elif isinstance(operand, (ProductOperator, LocalOperator)):
             if operand.prefactor:
-                new_terms = [operand1 *
-                             operand for operand1 in self.terms if operand1]
+                new_terms = [operand1 * operand for operand1 in self.terms if operand1]
             else:
                 new_terms = []
         elif isinstance(operand, SumOperator):
-            new_terms = [
-                op_1 * op_2 for op_1 in self.terms for op_2 in operand.terms]
+            new_terms = [op_1 * op_2 for op_1 in self.terms for op_2 in operand.terms]
         else:
             raise TypeError(type(operand))
 
@@ -674,7 +672,7 @@ class SumOperator(Operator):
         return SumOperator([t.dag() for t in self.terms])
 
     def partial_trace(self, sites: list):
-        return sum(term.prefactor*term.partial_trace(sites) for term in self.terms)
+        return sum(term.prefactor * term.partial_trace(sites) for term in self.terms)
 
     def simplify(self):
         system = self.system
@@ -741,10 +739,8 @@ class OneBodyOperator(SumOperator):
 
             for term in terms:
                 if isinstance(term, LocalOperator):
-                    assert isinstance(
-                        term.operator, (int, float, complex, Qobj))
-                    terms_by_site.setdefault(
-                        term.site, []).append(term.operator)
+                    assert isinstance(term.operator, (int, float, complex, Qobj))
+                    terms_by_site.setdefault(term.site, []).append(term.operator)
                     continue
                 if isinstance(term, ProductOperator):
                     n_factors = len(term.sites_op)
@@ -753,8 +749,7 @@ class OneBodyOperator(SumOperator):
                     elif n_factors == 0:
                         if term.system:
                             site = next(iter(term.system.sites))
-                            terms_by_site.setdefault(
-                                site, []).append(term.prefactor)
+                            terms_by_site.setdefault(site, []).append(term.prefactor)
                             continue
 
                         raise ValueError(
@@ -763,16 +758,14 @@ class OneBodyOperator(SumOperator):
                     else:
                         site, op_l = next(iter(term.sites_op.items()))
                         assert isinstance(op_l, (Number, Qobj))
-                        terms_by_site.setdefault(site, []).append(
-                            term.prefactor * op_l)
+                        terms_by_site.setdefault(site, []).append(term.prefactor * op_l)
                         continue
                 if isinstance(term, SumOperator):
                     for t_i in OneBodyOperator(
                         term.terms, term.system, check_and_convert=True
                     ).terms:
                         assert isinstance(t_i, (Number, LocalOperator))
-                        terms_by_site.setdefault(
-                            t_i.site, []).append(t_i.operator)
+                        terms_by_site.setdefault(t_i.site, []).append(t_i.operator)
                     continue
                 raise ValueError("Invalid term type", type(term))
 

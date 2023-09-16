@@ -40,8 +40,7 @@ class SystemDescriptor:
                 node: site_basis[attr["type"]] for node, attr in graph.nodes.items()
             }
 
-        self.dimensions = {name: site["dimension"]
-                           for name, site in self.sites.items()}
+        self.dimensions = {name: site["dimension"] for name, site in self.sites.items()}
         self.operators = {
             "site_operators": {},
             "bond_operators": {},
@@ -84,15 +83,17 @@ class SystemDescriptor:
         from alpsqutip.operators import LocalOperator, OneBodyOperator
 
         for constraint_qn in self.spec["model"].constraints:
-            global_qn = OneBodyOperator([], self,)
+            global_qn = OneBodyOperator(
+                [],
+                self,
+            )
             for site, site_basis in self.sites.items():
                 local_qn = site_basis["qn"].get(constraint_qn, None)
                 if local_qn is None:
                     continue
                 op_name = local_qn["operator"]
                 operator = site_basis["operators"][op_name]
-                global_qn = global_qn + \
-                    LocalOperator(site, operator, self)
+                global_qn = global_qn + LocalOperator(site, operator, self)
 
             if bool(global_qn):
                 self.operators["global_operators"][constraint_qn] = global_qn
@@ -109,8 +110,7 @@ class SystemDescriptor:
             return self
         if all(site in system.sites for site in self.sites):
             return system
-        raise NotImplementedError(
-            "Union of disjoint systems are not implemented.")
+        raise NotImplementedError("Union of disjoint systems are not implemented.")
 
     def site_operator(self, name: str, site: str = "") -> "Operator":
         """
@@ -126,8 +126,7 @@ class SystemDescriptor:
         else:
             op_name, site = name.split("@")
 
-        site_op = self.operators["site_operators"].get(
-            site, {}).get(name, None)
+        site_op = self.operators["site_operators"].get(site, {}).get(name, None)
         if site_op is not None:
             return site_op
 
@@ -339,8 +338,7 @@ class SystemDescriptor:
                 continue
             e_expr = expr.replace("#", edge_type).replace("@", "__")
             for src, dst in edges:
-                term_op = process_edge(
-                    e_expr, (edge_type, src, dst), model, t_parm)
+                term_op = process_edge(e_expr, (edge_type, src, dst), model, t_parm)
                 if isinstance(term_op, str):
                     raise ValueError(
                         f"   Bond term <<{term_op}>> could not be evaluated."
@@ -407,11 +405,10 @@ class Operator:
 
     def __truediv__(self, operand):
         if isinstance(operand, (int, float, complex)):
-            return self * (1./operand)
+            return self * (1.0 / operand)
         if isinstance(operand, Operator):
             return self * operand.inv()
-        raise ValueError("Division of an operator by ",
-                         type(operand), " not defined.")
+        raise ValueError("Division of an operator by ", type(operand), " not defined.")
 
     def __neg__(self):
         raise NotImplementedError()
@@ -459,8 +456,7 @@ class Operator:
         from alpsqutip.operators import QutipOperator
 
         op_qutip = self.to_qutip()
-        max_eval = op_qutip.eigenenergies(
-            sort="high", sparse=True, eigvals=3)[0]
+        max_eval = op_qutip.eigenenergies(sort="high", sparse=True, eigvals=3)[0]
         op_qutip = (op_qutip - max_eval).expm()
         return QutipOperator(op_qutip, self.system, prefactor=np.exp(max_eval))
 

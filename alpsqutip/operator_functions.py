@@ -10,7 +10,11 @@ from numpy import log, real
 
 from alpsqutip.model import Operator
 from alpsqutip.operators import (
-    LocalOperator, ProductOperator, OneBodyOperator, QutipOperator,)
+    LocalOperator,
+    OneBodyOperator,
+    ProductOperator,
+    QutipOperator,
+)
 
 
 def commutator(A: Operator, B: Operator) -> Operator:
@@ -29,8 +33,7 @@ def eigenvalues(
     maxiter: int = 100000,
 ) -> np_array:
     """Compute the eigenvalues of operator"""
-    return operator.to_qutip().eigenenergies(sparse, sort,
-                                             eigvals, tol, maxiter)
+    return operator.to_qutip().eigenenergies(sparse, sort, eigvals, tol, maxiter)
 
 
 def spectral_norm(operator: Operator) -> float:
@@ -79,7 +82,6 @@ def log_op(operator: Operator) -> Operator:
     return QutipOperator(qutip_log(operator.to_qutip()), system, None, 1)
 
 
-def relative_entropy(rho: Operator,
-                     sigma: Operator) -> float:
+def relative_entropy(rho: Operator, sigma: Operator) -> float:
     """Compute the relative entropy"""
     return real(rho.expect(log_op(rho) - log_op(sigma)))

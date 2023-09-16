@@ -32,8 +32,7 @@ def test_build_hamiltonian():
     hamiltonian_with_field = hamiltonian + 1.27 * sz_total
 
     ham_qf = QuadraticFormOperator.build_from_operator(hamiltonian_with_field)
-    assert check_operator_equality(
-        ham_qf.to_qutip(), hamiltonian_with_field.to_qutip())
+    assert check_operator_equality(ham_qf.to_qutip(), hamiltonian_with_field.to_qutip())
 
     ham_qf_simp = simplify_quadratic_form(ham_qf)
     assert check_operator_equality(

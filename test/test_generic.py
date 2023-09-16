@@ -3,13 +3,14 @@ Basic unit test.
 """
 
 
-from .helper import alert
-from alpsqutip.utils import eval_expr
-from alpsqutip.settings import FIGURES_DIR, LATTICE_LIB_FILE, MODEL_LIB_FILE
-from alpsqutip.model import SystemDescriptor
-from alpsqutip.geometry import graph_from_alps_xml, list_graph_in_alps_xml
-from alpsqutip.alpsmodels import list_operators_in_alps_xml, model_from_alps_xml
 import matplotlib.pyplot as plt
+from alpsqutip.alpsmodels import list_operators_in_alps_xml, model_from_alps_xml
+from alpsqutip.geometry import graph_from_alps_xml, list_graph_in_alps_xml
+from alpsqutip.model import SystemDescriptor
+from alpsqutip.settings import FIGURES_DIR, LATTICE_LIB_FILE, MODEL_LIB_FILE
+from alpsqutip.utils import eval_expr
+
+from .helper import alert
 
 
 def test_eval_expr():
@@ -34,8 +35,7 @@ def test_load():
     for name in list_graph_in_alps_xml(LATTICE_LIB_FILE):
         try:
             g = graph_from_alps_xml(
-                LATTICE_LIB_FILE, name, parms={
-                    "L": 3, "W": 3, "a": 1, "b": 1, "c": 1}
+                LATTICE_LIB_FILE, name, parms={"L": 3, "W": 3, "a": 1, "b": 1, "c": 1}
             )
         except Exception as e:
             assert False, f"geometry {name} could not be loaded due to {e}"
@@ -59,10 +59,11 @@ def test_load():
             model = model_from_alps_xml(
                 MODEL_LIB_FILE, modelname, parms={"Nmax": 3, "local_S": 0.5}
             )
-            alert(1,
-                  "site types:",
-                  {name: lb["name"] for name, lb in model.site_basis.items()},
-                  )
+            alert(
+                1,
+                "site types:",
+                {name: lb["name"] for name, lb in model.site_basis.items()},
+            )
         except Exception as e:
             assert False, f"{model} could not be loaded due to {e}"
 

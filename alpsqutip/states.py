@@ -6,7 +6,9 @@ from numbers import Number
 from typing import Dict, Iterable, Optional, Union
 
 import numpy as np
-from qutip import Qobj, tensor as qutip_tensor, qeye as qutip_qeye
+from qutip import Qobj
+from qutip import qeye as qutip_qeye
+from qutip import tensor as qutip_tensor
 
 from alpsqutip.model import Operator, SystemDescriptor
 from alpsqutip.operator_functions import eigenvalues
@@ -107,8 +109,7 @@ class ProductDensityOperator(ProductOperator, DensityOperatorMixin):
         dimensions = system.dimensions
         local_zs = {
             site: (
-                local_states[site].tr(
-                ) if site in local_states else dimensions[site]
+                local_states[site].tr() if site in local_states else dimensions[site]
             )
             for site in sites
         }
@@ -144,8 +145,7 @@ class ProductDensityOperator(ProductOperator, DensityOperatorMixin):
                 if site in local_states:
                     result *= (local_states[site] * obs_op).tr()
                 else:
-                    result *= obs_op.tr() / reduce((lambda x, y: x * y),
-                                                   obs_op.dims[0])
+                    result *= obs_op.tr() / reduce((lambda x, y: x * y), obs_op.dims[0])
             return result
         return super().expect(obs)
 
@@ -170,8 +170,7 @@ class ProductDensityOperator(ProductOperator, DensityOperatorMixin):
                 )
             if n_factors == 1:
                 site, sigma = next(sites_op.items())
-                local_dim = 1 / \
-                    system.dimensions.get(site, 1) if system else 1.0
+                local_dim = 1 / system.dimensions.get(site, 1) if system else 1.0
                 prefactor = self.prefactor
                 new_prefactor = prefactor + rho / local_dim
                 return ProductDensityOperator(
@@ -245,7 +244,7 @@ class ProductDensityOperator(ProductOperator, DensityOperatorMixin):
         ops = self.sites_op
         return prefactor * qutip_tensor(
             [
-                ops[site] if site in ops else qutip_qeye(dim)/dim
+                ops[site] if site in ops else qutip_qeye(dim) / dim
                 for site, dim in self.system.dimensions.items()
             ]
         )
@@ -294,8 +293,7 @@ class MixtureDensityOperator(SumOperator, DensityOperatorMixin):
         if isinstance(a, float):
             return MixtureDensityOperator(
                 [
-                    ProductDensityOperator(
-                        t.sites_op, t.prefactor * a, t.system, False)
+                    ProductDensityOperator(t.sites_op, t.prefactor * a, t.system, False)
                     for t in self.terms
                 ]
             )
@@ -369,8 +367,7 @@ class GibbsDensityOperator(Operator, DensityOperatorMixin):
             )
         if isinstance(operand, Operator):
             return self * operand.inv()
-        raise ValueError("Division of an operator by ",
-                         type(operand), " not defined.")
+        raise ValueError("Division of an operator by ", type(operand), " not defined.")
 
     def expect(self, obs: Union[Operator, Iterable]) -> Union[np.ndarray, dict, Number]:
         return self.to_qutip_operator().expect(obs)
@@ -512,8 +509,7 @@ class GibbsProductDensityOperator(Operator, DensityOperatorMixin):
         """Convert the operator in a productstate"""
 
         return ProductDensityOperator(
-            {site: (-local_k).expm()
-             for site, local_k in self.k_by_site.items()},
+            {site: (-local_k).expm() for site, local_k in self.k_by_site.items()},
             self.prefactor,
             system=self.system,
             normalize=False,

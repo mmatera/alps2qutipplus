@@ -9,9 +9,7 @@ import numpy as np
 import qutip
 from alpsqutip.model import Operator, SystemDescriptor, build_spin_chain
 from alpsqutip.operators import OneBodyOperator, ProductOperator, SumOperator
-
 from alpsqutip.settings import VERBOSITY_LEVEL
-
 
 CHAIN_SIZE = 6
 
@@ -42,8 +40,14 @@ sh_B = 0.25 * sx_B + 0.5 * sz_B
 sh_AB = 0.7 * sh_A + 0.3 * sh_B
 
 
-subsystems = [[sites[0]], [sites[1]], [sites[2]], [sites[0], sites[1]], [sites[0], sites[2]],
-              [sites[2], sites[3]]]
+subsystems = [
+    [sites[0]],
+    [sites[1]],
+    [sites[2]],
+    [sites[0], sites[1]],
+    [sites[0], sites[2]],
+    [sites[2], sites[3]],
+]
 
 
 observable_cases = {
@@ -64,7 +68,7 @@ def alert(verbosity, *args):
 
 def check_equality(lhs, rhs):
     """
-    Compare lhs and rhs and raise an assertion error if they are 
+    Compare lhs and rhs and raise an assertion error if they are
     different.
     """
     if isinstance(lhs, Number) and isinstance(rhs, Number):
