@@ -12,6 +12,8 @@ from alpsqutip.operators import (
     SumOperator,
 )
 
+from .helper import check_operator_equality
+
 CHAIN_SIZE = 6
 
 system_descriptor = build_spin_chain(CHAIN_SIZE)
@@ -44,12 +46,6 @@ opglobal = szC + sxAsyB_times_2
 
 sz_total = system_descriptor.global_operator("Sz")
 hamiltonian = system_descriptor.global_operator("Hamiltonian")
-
-
-def check_operator_equality(op1, op2):
-    """check if two operators are numerically equal"""
-    op_diff = op1 - op2
-    return (op_diff.dag() * op_diff).tr() < 1.0e-9
 
 
 def test_build_hamiltonian():
@@ -89,7 +85,8 @@ def test_type_operator():
 
     assert check_operator_equality(sxA, sxA.to_qutip())
     terms = [sxA, syA, szA]
-    assert check_operator_equality(sum(terms), sum(t.to_qutip() for t in terms))
+    assert check_operator_equality(
+        sum(terms), sum(t.to_qutip() for t in terms))
     assert check_operator_equality(sxA.inv(), sxA.to_qutip().inv())
     opglobal_offset = opglobal + 1.3821
     assert check_operator_equality(
@@ -106,12 +103,14 @@ def test_inv_operator():
     sx_obl = sxA + syB + szC
     sx_obl_inv = sx_obl.inv()
     assert isinstance(sx_obl_inv, QutipOperator)
-    assert check_operator_equality(sx_obl_inv.to_qutip(), sx_obl.to_qutip().inv())
+    assert check_operator_equality(
+        sx_obl_inv.to_qutip(), sx_obl.to_qutip().inv())
 
     s_prod = sxA * syB * szC
     s_prod_inv = s_prod.inv()
     assert isinstance(s_prod, ProductOperator)
-    assert check_operator_equality(s_prod_inv.to_qutip(), s_prod.to_qutip().inv())
+    assert check_operator_equality(
+        s_prod_inv.to_qutip(), s_prod.to_qutip().inv())
 
     opglobal_offset = opglobal + 1.3821
     opglobal_offset_inv = opglobal_offset.inv()
@@ -130,19 +129,23 @@ def test_exp_operator():
     sx_obl = sxA + syB + szC
     sx_obl_exp = sx_obl.expm()
     assert isinstance(sx_obl_exp, ProductOperator)
-    assert check_operator_equality(sx_obl_exp.to_qutip(), sx_obl.to_qutip().expm())
+    assert check_operator_equality(
+        sx_obl_exp.to_qutip(), sx_obl.to_qutip().expm())
 
     opglobal_exp = opglobal.expm()
     assert isinstance(opglobal_exp, QutipOperator)
-    assert check_operator_equality(opglobal_exp.to_qutip(), opglobal.to_qutip().expm())
+    assert check_operator_equality(
+        opglobal_exp.to_qutip(), opglobal.to_qutip().expm())
 
 
 def test_local_operator():
     """Tests for local operators"""
 
     assert (szA * szA).tr() == 0.5 * 2 ** (CHAIN_SIZE - 1)
-    assert ((sxA * syA - syA * sxA) * szA).tr() == -1j * 0.5 * 2 ** (CHAIN_SIZE - 1)
-    assert (szA * (sxA * syA - syA * sxA)).tr() == -1j * 0.5 * 2 ** (CHAIN_SIZE - 1)
+    assert ((sxA * syA - syA * sxA) * szA).tr() == - \
+        1j * 0.5 * 2 ** (CHAIN_SIZE - 1)
+    assert (szA * (sxA * syA - syA * sxA)).tr() == - \
+        1j * 0.5 * 2 ** (CHAIN_SIZE - 1)
 
     assert (szA * syB * szA * syB).tr() == 0.25 * 2 ** (CHAIN_SIZE - 2)
     assert (
@@ -211,7 +214,8 @@ def test_qutip_operators():
 
     for subsystem in subsystems:
         assert (sxA_qt).partial_trace(subsystem).tr() == 0.0
-        assert (sxA2_qt).partial_trace(subsystem).tr() == 0.5 * 2 ** (CHAIN_SIZE - 1)
+        assert (sxA2_qt).partial_trace(
+            subsystem).tr() == 0.5 * 2 ** (CHAIN_SIZE - 1)
         assert (sxAsyB_qt * sxA_qt * syB_qt).partial_trace(
             subsystem
         ).tr() == 0.25 * 2 ** (CHAIN_SIZE - 2)
