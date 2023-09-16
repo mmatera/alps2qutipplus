@@ -31,7 +31,6 @@ sy_A = system.site_operator(f"Sy@{sites[0]}")
 sy_B = system.site_operator(f"Sy@{sites[1]}")
 
 
-
 sz_A = system.site_operator(f"Sz@{sites[0]}")
 sz_B = system.site_operator(f"Sz@{sites[1]}")
 sz_C = system.site_operator(f"Sz@{sites[2]}")
@@ -100,6 +99,13 @@ def check_equality(lhs, rhs):
 
 def check_operator_equality(op1, op2):
     """check if two operators are numerically equal"""
+
+    if isinstance(op2, qutip.Qobj):
+        op1, op2 = op2, op1
+
+    if isinstance(op1, qutip.Qobj) and isinstance(op2, Operator):
+        op2 = op2.to_qutip()
+
     op_diff = op1 - op2
     return (op_diff.dag() * op_diff).tr() < 1.0e-9
 

@@ -12,9 +12,11 @@ from alpsqutip.operators import (
 )
 
 from .helper import (check_operator_equality, CHAIN_SIZE,
-                     sites, sx_A, sy_A, sy_B, sz_C, sz_A, sz_total, hamiltonian)
+                     sites, sx_A as local_sx_A, sy_A, sy_B, sz_C, sz_A, sz_total, hamiltonian)
 
 
+sx_A = ProductOperator(
+    {local_sx_A.site: local_sx_A.operator}, 1., local_sx_A.system)
 sx_A2 = sx_A * sx_A
 sx_Asy_B = sx_A * sy_B
 sx_AsyB_times_2 = 2 * sx_Asy_B
@@ -34,7 +36,7 @@ def test_build_hamiltonian():
 
 def test_type_operator():
     """Tests for operator types"""
-    assert isinstance(sx_A, LocalOperator)
+    assert isinstance(sx_A, ProductOperator)
     assert isinstance(sy_B, LocalOperator)
     assert isinstance(sz_C, LocalOperator)
     assert isinstance(2 * sy_B, LocalOperator)
@@ -113,12 +115,18 @@ def test_exp_operator():
 
 def test_local_operator():
     """Tests for local operators"""
-
+    assert (sx_A * sx_A).tr() == 0.5 * 2 ** (CHAIN_SIZE - 1)
     assert (sz_A * sz_A).tr() == 0.5 * 2 ** (CHAIN_SIZE - 1)
-    assert ((sx_A * sy_A - sy_A * sx_A) * sz_A).tr() == - \
-        1j * 0.5 * 2 ** (CHAIN_SIZE - 1)
-    assert (sz_A * (sx_A * sy_A - sy_A * sx_A)).tr() == - \
-        1j * 0.5 * 2 ** (CHAIN_SIZE - 1)
+
+    print("product * local", type(sx_A * sy_A))
+    print("local * product", type(sy_A * sx_A))
+    print("commutator:", type(sx_A * sy_A - sy_A * sx_A))
+    print(((sx_A * sy_A - sy_A * sx_A) * sz_A).tr(),
+          -1j * 0.5 * 2 ** (CHAIN_SIZE - 1))
+    assert ((sx_A * sy_A - sy_A * sx_A) * sz_A).tr() == (
+        -1j * 0.5 * 2 ** (CHAIN_SIZE - 1))
+    assert (sz_A * (sx_A * sy_A - sy_A * sx_A)).tr() == (
+        -1j * 0.5 * 2 ** (CHAIN_SIZE - 1))
 
     assert (sz_A * sy_B * sz_A * sy_B).tr() == 0.25 * 2 ** (CHAIN_SIZE - 2)
     assert (

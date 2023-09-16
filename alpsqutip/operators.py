@@ -219,6 +219,13 @@ class LocalOperator(Operator):
             return ProductOperator(
                 {site: operator, operand.site: operand.operator}, 1.0, system=system
             )
+        if isinstance(operand, ProductOperator):
+            sites_op = operand.sites_op
+            n_ops = len(sites_op)
+            if n_ops == 0:
+                return LocalOperator(site, operator * operand.prefactor, system)
+            if n_ops == 1 and site in sites_op:
+                return LocalOperator(site, operator * sites_op[site], system)
         return ProductOperator({site: operator}, system=system) * operand
 
     def __rmul__(self, operand):
@@ -366,16 +373,33 @@ class ProductOperator(Operator):
             if len(operand.sites_op) == 1 and len(self.sites_op) == 1:
                 site = next(iter(self.sites_op))
                 if site in operand.sites_op:
-                    return ProductOperator(
-                        {
-                            site: (
-                                self.sites_op[site] * self.prefactor
-                                + operand.sites_op[site] * operand.prefactor
-                            )
-                        },
-                        prefactor=1,
+                    return LocalOperator(
+                        site,
+                        self.sites_op[site] * self.prefactor
+                        + operand.sites_op[site] * operand.prefactor,
                         system=self.system,
                     )
+                print("One Body operator...")
+                return OneBodyOperator([operand, self], self.system, True)
+            new_terms = [operand, self]
+        elif isinstance(operand, LocalOperator):
+            site = next(iter(self.sites_op))
+            if len(self.sites_op) == 1:
+                if site == operand.site:
+                    return LocalOperator(
+                        site,
+                        self.sites_op[site] * self.prefactor
+                        + operand.operator,
+                        system=self.system,
+                    )
+                return OneBodyOperator([operand,
+                                        LocalOperator(
+                                            site,
+                                            self.sites_op[site] *
+                                            self.prefactor,
+                                            system=self.system,
+                                        )
+                                        ], self.system, True)
             new_terms = [operand, self]
         elif isinstance(operand, SumOperator):
             new_terms = operand.terms + [self]
@@ -468,6 +492,32 @@ class ProductOperator(Operator):
             prefactor = prefactor.conj()
         return ProductOperator(sites_op_dag, prefactor, self.system)
 
+    def expm(self):
+        sites_op = self.sites_op
+        n_ops = len(sites_op)
+        if n_ops == 0:
+            return ProductOperator({}, np.exp(self.prefactor), self.system)
+        if n_ops == 1:
+            site, operator = next(iter(sites_op.items()))
+            result = LocalOperator(site, (self.prefactor*operator).expm(),
+                                   self.system)
+            return result
+        result = super().expm()
+        return result
+
+    def inv(self):
+        sites_op = self.sites_op
+        system = self.system
+        prefactor = self.prefactor
+
+        n_ops = len(sites_op)
+        sites_op = {site: op_local.inv()
+                    for site, op_local in sites_op.items()}
+        if n_ops == 1:
+            site, op_local = next(iter(sites_op.items()))
+            return LocalOperator(site, op_local/prefactor, system)
+        return ProductOperator(sites_op, 1/prefactor, system)
+
     def partial_trace(self, sites: list):
         full_system_sites = self.system.sites
         dimensions = self.dimensions
@@ -523,6 +573,7 @@ class SumOperator(Operator):
 
     def __init__(self, terms_coeffs: list, system=None):
         self.terms = terms_coeffs
+        print([type(t) for t in terms_coeffs])
         assert all(isinstance(t, Operator) for t in terms_coeffs)
 
         if system is None and terms_coeffs:

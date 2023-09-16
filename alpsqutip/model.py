@@ -271,7 +271,7 @@ class SystemDescriptor:
             if site_type is not None and site_type != node_type:
                 continue
             s_expr = expr.replace("#", node_type).replace("@", "__")
-            s_parm = {key.replace("#", node_type)                      : val for key, val in t_parm.items()}
+            s_parm = {key.replace("#", node_type): val for key, val in t_parm.items()}
             s_parm.update(
                 {
                     f"{name_op}_local": local_op
@@ -419,7 +419,6 @@ class Operator:
     def __sub__(self, operand):
         if operand is None:
             raise ValueError("None can not be an operand")
-
         neg_op = -operand
         return self + neg_op
 

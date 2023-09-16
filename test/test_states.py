@@ -10,14 +10,16 @@ from alpsqutip.states import (
     ProductDensityOperator,
 )
 
-from .helper import (check_equality,
-                     expect_from_qutip,
-                     sz_total,
-                     system,
-                     hamiltonian,
-                     subsystems,
-                     observable_cases,
-                     )
+from .helper import (
+    alert,
+    check_equality,
+    expect_from_qutip,
+    sz_total,
+    system,
+    hamiltonian,
+    subsystems,
+    observable_cases,
+)
 
 
 # from alpsqutip.settings import VERBOSITY_LEVEL
@@ -58,7 +60,7 @@ def test_states():
     }
 
     for name, rho in test_cases_states.items():
-        print("\n", 100 * "@", "\n", name, "\n", 100 * "@")
+        alert(0, "\n", 100 * "@", "\n", name, "\n", 100 * "@")
         assert abs(rho.tr() - 1) < 1.0e-10
         assert abs(1 - qt_test_cases[name].tr()) < 1.0e-10
 
@@ -74,9 +76,9 @@ def test_states():
         assert isinstance(expectation_values, dict)
         assert isinstance(qt_expectation_values, dict)
         for obs in expectation_values:
-            print("\n     ", 80 * "*", "\n     ", name, obs)
-            print(expectation_values)
-            print(qt_expectation_values)
+            alert(0, "\n     ", 80 * "*", "\n     ", name, obs)
+            alert(0, expectation_values)
+            alert(0, qt_expectation_values)
             assert check_equality(
                 expectation_values[obs], qt_expectation_values[obs])
 
