@@ -26,23 +26,10 @@ sx_A = system.site_operator(f"Sx@{sites[0]}")
 sx_B = system.site_operator(f"Sx@{sites[1]}")
 sx_AB = 0.7 * sx_A + 0.3 * sx_B
 
-sy_A = (
-    0.5
-    * 1j
-    * (
-        system.site_operator(f"Splus@{sites[0]}")
-        - system.site_operator(f"Sminus@{sites[0]}")
-    )
-)
 
-sy_B = (
-    0.5
-    * 1j
-    * (
-        system.site_operator(f"Splus@{sites[1]}")
-        - system.site_operator(f"Sminus@{sites[1]}")
-    )
-)
+sy_A = system.site_operator(f"Sy@{sites[0]}")
+sy_B = system.site_operator(f"Sy@{sites[1]}")
+
 
 
 sz_A = system.site_operator(f"Sz@{sites[0]}")
